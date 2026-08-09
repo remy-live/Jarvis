@@ -1,0 +1,926 @@
+:root {
+    --color-neon: #00ffff;
+    --color-bg: #000000;
+    
+    /* --- SYSTÈME DE COUCHES (Z-INDEX) --- */
+    /* 1. Fond : Vidéo quand elle est en plein écran */
+    --z-video-fullscreen: 0;
+    
+    /* 2. Jeu : La 3D et l'Interface */
+    --z-game-layer: 10;
+    
+    /* 3. Debug : La petite vignette (doit être devant le jeu) */
+    --z-video-vignette: 100;
+    
+    /* 4. Boot : L'écran de chargement (Cache tout le reste) */
+    --z-boot: 9999;
+}
+
+/* --- RESET GLOBAL --- */
+* { 
+    box-sizing: border-box; 
+}
+
+body, html {
+    margin: 0; padding: 0;
+    width: 100vw; height: 100vh;
+    background-color: var(--color-bg);
+    overflow: hidden; /* Pas de scrollbar */
+    font-family: 'Orbitron', sans-serif; /* Ambiance Arcade */
+    user-select: none; /* On ne peut pas sélectionner le texte */
+}
+
+/* ---------------------------------------------------------
+   1. LA SOURCE VIDÉO BRUTE
+   Cachée mais active pour MediaPipe
+--------------------------------------------------------- */
+#webcam-video {
+    position: absolute;
+    top: 0; left: 0;
+    opacity: 0;           
+    pointer-events: none; 
+    z-index: -1;
+}
+
+/* ---------------------------------------------------------
+   2. LE RETOUR VIDÉO (Feedback Canvas)
+   C'est lui qui change de place (Vignette <-> Plein écran)
+--------------------------------------------------------- */
+#feedback-canvas {
+    position: fixed;
+    background-color: #000;
+}
+
+/* ÉTAT A : MODE VIGNETTE (Debug) */
+.view-vignette {
+    /* Taille fixe */
+    width: 320px;
+    height: 240px;
+    
+    /* Position : En bas à droite */
+    right: 20px;
+    bottom: 20px;
+    top: auto; left: auto; /* Reset */
+    
+    /* Apparence */
+    border: 2px solid var(--color-neon);
+    border-radius: 12px;
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+    
+    /* HIERARCHIE : Devant le jeu */
+    z-index: var(--z-video-vignette);
+    transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); /* Animation fluide 'pop' */
+}
+
+/* ÉTAT B : MODE PLEIN ÉCRAN (Réalité Augmentée) */
+.view-fullscreen {
+    /* Taille : Tout l'écran */
+    width: 100% !important;
+    height: 100% !important;
+    top: 0; left: 0;
+    right: auto; bottom: auto; /* Reset */
+    
+    /* Apparence : Aucune bordure */
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    
+    /* Remplissage propre (Cover) */
+    object-fit: cover;
+    
+    /* HIERARCHIE : Derrière le jeu */
+    z-index: var(--z-video-fullscreen);
+    
+    /* INTERACTION : On clique à travers pour toucher le jeu */
+    pointer-events: none;
+}
+
+/* ---------------------------------------------------------
+   3. LE JEU (3D + UI)
+--------------------------------------------------------- */
+
+#background-picture,
+#three-canvas,
+#layer-2d,
+#ui-canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none; /* Important pour cliquer au travers */
+}
+
+/* --- ORDRE D'AFFICHAGE (Z-INDEX) --- */
+
+#background-picture {
+    z-index: 0;
+    background: radial-gradient(circle, #222 0%, #000 100%);
+}
+
+#three-canvas {
+    z-index: 1; /* La 3D est au fond */
+    background: transparent; /* Crucial ! */
+}
+
+#layer-2d {
+    z-index: 2; /* La 2D (Écureuil) est par dessus la 3D */
+}
+
+#ui-canvas {
+    z-index: 10; /* L'interface par dessus tout */
+}
+
+
+
+/* ---------------------------------------------------------
+   4. ÉCRAN DE DÉMARRAGE (BOOT)
+--------------------------------------------------------- */
+#boot-screen {
+    position: fixed;
+    inset: 0;
+    background: var(--color-bg);
+    z-index: var(--z-boot);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    
+    /* Transition pour le fondu de sortie */
+    opacity: 1;
+    transition: opacity 0.8s ease-out;
+}
+
+.boot-content {
+    text-align: center;
+    color: var(--color-neon);
+    width: 80%;
+    max-width: 400px;
+}
+
+h1.glitch {
+    font-size: 3rem;
+    margin-bottom: 2rem;
+    text-transform: uppercase;
+    text-shadow: 0 0 15px var(--color-neon);
+    letter-spacing: 5px;
+}
+
+#status-text {
+    margin-bottom: 15px;
+    font-size: 0.9rem;
+    color: #aaa;
+    min-height: 1.2em; /* Évite le saut quand le texte change */
+}
+
+.loader-track {
+    width: 100%;
+    height: 4px;
+    background: #333;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+/* Attention : l'ID doit correspondre à main.js (loading-bar) */
+#loading-bar {
+    width: 0%;
+    height: 100%;
+    background: var(--color-neon);
+    box-shadow: 0 0 10px var(--color-neon);
+    transition: width 0.3s ease-out;
+}
+
+
+
+/* --- HEADER GLOBAL --- */
+#ui-header {
+    position: absolute;
+    top: 0; left: 0; width: 100%;
+    height: 60px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+    box-sizing: border-box;
+    z-index: 1000; /* Toujours au-dessus */
+    
+    /* Effet Verre (Glassmorphism) */
+    color: white;
+    font-family: 'Arial', sans-serif;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px black;
+    transition: transform 0.3s ease;
+}
+
+/* Scores */
+.score-box {
+    font-size: 24px;
+    min-width: 100px;
+}
+#score-p2 { text-align: right; margin-right: 15px; color: #f1c40f; }
+
+/* Centre (Switch & Bouton Quitter) */
+.header-center {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    display: flex; gap: 10px;
+}
+
+/* Bouton Quitter */
+.btn-quit {
+    background: #e74c3c;
+    color: white;
+    border: 2px solid #c0392b;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    display: none; /* Caché par défaut */
+}
+.btn-quit:hover { background: #ff6b6b; }
+
+/* Switch 1J / 2J */
+.player-switch {
+    display: flex;
+    background: rgba(0,0,0,0.5);
+    border-radius: 20px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.3);
+    cursor: pointer;
+}
+.switch-opt {
+    padding: 8px 15px;
+    font-size: 14px;
+    color: #aaa;
+    transition: 0.3s;
+}
+.switch-opt.active {
+    background: #3498db;
+    color: white;
+    font-weight: bold;
+}
+
+/* Bouton Son */
+.btn-sound {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: white;
+    filter: drop-shadow(0 2px 2px rgba(0,0,0,0.5));
+}
+
+
+
+
+
+
+
+
+
+// JEU 
+
+/* --- UI JEU NOISETTES (DOM OVERLAY) --- */
+
+/* Le conteneur du masque et des noisettes */
+#nuts-game-layer {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none; /* Laisse passer les clics si besoin */
+    overflow: hidden;
+    z-index: 10; /* Au-dessus du Canvas 3D */
+}
+
+
+
+
+#layer-2d {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 2; /* Au-dessus de la 3D, en dessous de l'UI */
+    pointer-events: none; /* Laisse passer les clics sauf sur le menu */
+}
+
+
+
+
+:root {
+    --paper-bg: #f4f1ea; /* Blanc cassé */
+    --paper-line: #a2a2a2; /* Couleur des lignes */
+    --ink-color: #2c2c2c; /* Couleur style encre */
+    --highlight-color: #ff4757; /* Pour le survol */
+    --font-paper: 'Patrick Hand', cursive, sans-serif;
+}
+
+/* --- CURSEUR VIRTUEL (DWELL CLICK) --- */
+
+.virtual-cursor {
+    position: absolute;
+    width: 0; height: 0;
+    pointer-events: none;
+    z-index: 9999;
+    display: none; /* Caché par défaut */
+    transition: top 0.05s linear, left 0.05s linear; /* Mouvement fluide */
+    
+    /* Couleur par défaut (sera écrasée par le JS) */
+    --cursor-color: #00ffff; 
+}
+
+.cursor-scaler {
+    position: absolute;
+    top: 0; left: 0;
+    width: 60px; height: 60px;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Effet rebond */
+}
+
+/* Le point central */
+.cursor-dot {
+    position: absolute;
+    width: 8px; height: 8px;
+    background: white;
+    border-radius: 50%;
+    box-shadow: 0 0 10px white, 0 0 20px var(--cursor-color);
+}
+
+/* Le cercle SVG */
+.progress-ring {
+    transform: rotate(-90deg); /* Commence en haut */
+    overflow: visible;
+}
+
+.ring-bg {
+    stroke: rgba(255, 255, 255, 0.2);
+    stroke-width: 3;
+    fill: none;
+}
+
+.ring-progress {
+    stroke: var(--cursor-color); /* Utilise la variable ! */
+    stroke-width: 4;
+    fill: none;
+    stroke-dasharray: 138; /* Circonférence pour r=22 */
+    stroke-dashoffset: 138; /* Vide au début */
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.05s linear;
+    filter: drop-shadow(0 0 4px var(--cursor-color)); /* Glow néon */
+}
+
+/* --- ÉTATS --- */
+
+/* Quand on vise (zoom) */
+.cursor-locked .cursor-scaler {
+    transform: translate(-50%, -50%) scale(1.3);
+}
+
+/* Quand on valide (flash blanc) */
+.cursor-clicked .ring-progress {
+    stroke: #ffffff !important;
+    filter: drop-shadow(0 0 15px white) !important;
+    transition: none;
+}
+
+/* --- Conteneur Principal --- */
+.paper-menu-container {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    
+    /* Fond texture papier + lignes */
+    background-color: var(--paper-bg);
+    background-image: 
+        linear-gradient(var(--paper-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--paper-line) 1px, transparent 1px);
+    background-size: 100% 30px, 30px 100%; /* Lignes horizontales style cahier */
+    /* Optionnel : ajouter une vraie texture d'image par dessus */
+    /* background-image: url('path/to/paper-texture.jpg'), linear-gradient(...) */
+    /* background-blend-mode: multiply; */
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    box-sizing: border-box;
+    font-family: var(--font-paper);
+    color: var(--ink-color);
+    
+    /* Important : permet les interactions pointer events sur ce calque */
+    pointer-events: auto !important; 
+}
+
+/* --- Titre --- */
+.paper-title {
+    font-size: 4rem;
+    margin-bottom: 2rem;
+    text-transform: uppercase;
+    /* Effet "gribouillé" */
+    text-shadow: 2px 2px 0px rgba(0,0,0,0.2);
+    transform: rotate(-2deg);
+    border-bottom: 3px dashed var(--ink-color);
+}
+
+/* --- Grille --- */
+.paper-grid-wrapper {
+    width: 100%;
+    max-width: 1000px;
+    flex-grow: 1; /* Prend l'espace disponible */
+    display: flex;
+    align-items: center;
+}
+
+.paper-grid {
+    display: grid;
+    /* 3 colonnes, 3 lignes auto-dimensionnées */
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 1.5rem;
+    width: 100%;
+    height: 100%;
+    max-height: 60vh; /* Limite la hauteur pour garder l'aspect 3x3 */
+}
+
+/* --- Cartes de jeu --- */
+.paper-card {
+    position: relative;
+    background: #fff;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    cursor: pointer;
+    overflow: hidden; /* Pour la barre de progression */
+
+    /* Style bordure "dessinée à la main" */
+    border: 3px solid var(--ink-color);
+    border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+    box-shadow: 5px 5px 0 rgba(0,0,0,0.1);
+    transition: all 0.2s ease-out;
+}
+
+/* États de survol (Souris ET Doigt) */
+.paper-card:hover, .paper-card.finger-hover {
+    transform: scale(1.05) rotate(1deg);
+    box-shadow: 8px 8px 0 rgba(0,0,0,0.15);
+    background: #fffce0; /* Légèrement jaune style post-it */
+    border-color: var(--highlight-color);
+    color: var(--highlight-color);
+}
+
+.paper-card h2 {
+    font-size: 1.8rem;
+    margin: 0;
+}
+
+.game-marker {
+    position: absolute;
+    top: 10px; left: 15px;
+    font-size: 1.2rem;
+    opacity: 0.6;
+    text-decoration: underline dashed;
+}
+
+/* --- Barre de progression (Dwell Click) --- */
+.dwell-progress-bar {
+    position: absolute;
+    bottom: 0; left: 0;
+    height: 6px;
+    width: 0%; /* Commence à 0 */
+    background-color: var(--highlight-color);
+    transition: width 0.1s linear; /* Transition fluide gérée par le JS */
+}
+
+/* --- Pagination --- */
+.paper-pagination {
+    margin-top: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 1.5rem;
+}
+
+.paper-btn {
+    background: none;
+    border: 2px dashed var(--ink-color);
+    font-family: var(--font-paper);
+    font-size: 1.2rem;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 5px;
+}
+
+.paper-btn:hover:not([disabled]), .paper-btn.finger-hover:not([disabled]) {
+    background: var(--ink-color);
+    color: var(--paper-bg);
+    transform: rotate(-2deg);
+}
+
+.paper-btn[disabled] {
+    opacity: 0.3;
+    cursor: not-allowed;
+    border-style: dotted;
+}
+
+/* --- Curseur du Doigt (Debug visuel) --- */
+.finger-cursor {
+    pointer-events: none !important; /* Le curseur devient "fantôme" pour les clics */
+    position: fixed;
+    z-index: 9999;
+    /* Styles visuels (exemples) */
+    width: 25px;
+    height: 25px;
+    border: 3px solid #0ef;
+    border-radius: 50%;
+    box-shadow: 0 0 15px #0ef;
+}
+
+
+/* --- LE MASQUE ÉCUREUIL (EFFET 3D & TRANSPARENCE) --- */
+#squirrel-mask {
+    position: absolute;
+    top: 0; left: 0;
+    width: 120px; 
+    height: 180px;
+    transform-origin: center center;
+    pointer-events: none;
+    will-change: transform;
+    opacity: 0.8;
+}
+
+.mask-head {
+    width: 100%; height: 100%;
+    
+    /* 1. LE DÉGRADÉ (Relief) */
+    /* Notez bien 'background' et non 'background-color' */
+    /* On force le contraste : Centre orange vif -> Bords marron foncé */
+    background: radial-gradient(
+        circle at 30% 30%, 
+        rgba(230, 126, 34, 0.95) 10%,   /* Point de lumière (Haut Gauche) */
+        rgba(211, 84, 0, 0.9) 50%,      /* Couleur principale */
+        rgba(120, 50, 10, 0.95) 100%    /* Bords très sombres pour l'effet 3D */
+    );
+
+    /* Flou d'arrière plan (Effet verre) */
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+
+    border-radius: 50% 50% 45% 45%; 
+    
+    /* Bordure semi-transparente pour ne pas faire "sticker" */
+    border: 3px solid rgba(80, 40, 10, 0.8);
+
+    /* Ombres pour le volume global */
+    box-shadow: 
+        inset 0 4px 15px rgba(255, 255, 255, 0.25), /* Reflet haut */
+        inset 0 -10px 20px rgba(0, 0, 0, 0.3),      /* Ombre bas */
+        0 10px 20px rgba(0,0,0,0.4);                /* Ombre portée */
+        
+    position: relative;
+    /* Assurez-vous qu'il n'y a PAS de ligne 'background-color' ici ou après ! */
+}
+
+/* --- LES OREILLES (Transition Douce) --- */
+.mask-head::before, .mask-head::after {
+    content: '';
+    position: absolute;
+    
+    /* On descend les oreilles un peu plus bas pour cacher la jonction */
+    top: -18px; 
+    
+    width: 35px; height: 55px; /* Un peu plus hautes */
+    
+    /* 2. LE DÉGRADÉ DES OREILLES */
+    /* Le bas de l'oreille doit être FONCÉ pour se fondre dans le bord foncé de la tête */
+    background: linear-gradient(
+        to bottom, 
+        rgba(230, 126, 34, 0.9) 0%,   /* Haut clair */
+        rgba(211, 84, 0, 0.9) 60%,    /* Milieu */
+        rgba(120, 50, 10, 0.95) 100%  /* BAS SOMBRE (Match le bord de la tête) */
+    );
+    
+    /* 3. L'ASTUCE DE LA BORDURE INVISIBLE */
+    border-top: 3px solid rgba(80, 40, 10, 0.8);
+    border-left: 3px solid rgba(80, 40, 10, 0.8);
+    border-right: 3px solid rgba(80, 40, 10, 0.8);
+    
+    /* PAS de bordure en bas, c'est ça qui cassait l'immersion ! */
+    border-bottom: none; 
+
+    border-radius: 50% 50% 0 0;
+    z-index: -1; /* Derrière la tête */
+    
+    /* Ombre interne pour creuser l'oreille + Ombre de fusion en bas */
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.3);
+}
+
+/* Positionnement Oreilles (Inchangé) */
+.mask-head::before { left: 4px; transform: rotate(-10deg); }
+.mask-head::after { right: 4px; transform: rotate(10deg); }
+
+/* Yeux (Effet Bille / Verre) */
+.mask-eyes {
+    display: flex;
+    justify-content: space-between;
+    padding: 60px 10px 0; 
+}
+
+.eye {
+    width: 32px; height: 32px;
+    
+    /* Fond blanc cassé légèrement transparent */
+    background: radial-gradient(circle at 40% 40%, rgba(255,255,255,0.95), rgba(220,220,220,0.8));
+    
+    border-radius: 50%;
+    border: 2px solid rgba(51, 51, 51, 0.9);
+    position: relative;
+    overflow: hidden;
+
+    /* Relief de l'œil (sphère) */
+    box-shadow: 
+        inset 2px 2px 5px rgba(255,255,255,1), /* Reflet lumière */
+        inset -2px -2px 5px rgba(0,0,0,0.2),   /* Ombre volume */
+        0 2px 5px rgba(0,0,0,0.2);            /* Ombre portée */
+}
+
+/* Pupille */
+.eye::after { 
+    content: ''; 
+    position: absolute; 
+    top: 8px; right: 6px; 
+    width: 10px; height: 10px; 
+    background: #333; 
+    border-radius: 50%; 
+    /* Petit reflet blanc dans la pupille pour la vie */
+    box-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
+
+.eye.closed { 
+    /* Paupière fermée : reprend la texture du visage */
+    background: linear-gradient(to bottom, rgba(211, 84, 0, 0.9), rgba(160, 64, 0, 0.9));
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.2);
+}
+.eye.closed::after { display: none; }
+.eye.closed::before { 
+    content: ''; position: absolute; top: 55%; left: 10%; width: 80%; height: 3px; 
+    background: rgba(51,51,51,0.8); 
+    border-radius: 2px;
+}
+
+/* Nez (Effet brillant / humide) */
+.mask-nose { 
+    position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); 
+    width: 25px; height: 15px; 
+    
+    /* Petit dégradé pour faire un nez brillant */
+    background: radial-gradient(circle at 30% 30%, #666, #111);
+    
+    border-radius: 40% 40% 60% 60%; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+/* --- LA BOUCHE --- */
+.mask-mouth {
+    position: absolute;
+    top: 125px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 50px; 
+    height: 10px; 
+    
+    /* Fond sombre légèrement transparent */
+    background-color: rgba(62, 30, 10, 0.95); 
+    
+    border-radius: 0 0 25px 25px;
+    overflow: hidden;
+    border: 2px solid rgba(90, 45, 12, 0.8);
+    z-index: 5;
+    
+    /* Ombre interne pour la profondeur de la gorge */
+    box-shadow: inset 0 -5px 10px rgba(0,0,0,0.5);
+
+    transition: height 0.05s linear, background-color 0.4s ease-out, box-shadow 0.4s ease-out;
+}
+
+.mask-mouth.ready-to-eat {
+    background-color: rgba(138, 43, 226, 0.9); /* Violet avec transparence */
+    box-shadow: inset 0 0 15px #ff00ff, 0 0 15px rgba(138, 43, 226, 0.6);
+    border-color: rgba(255,255,255,0.9);
+}
+
+.mask-teeth {
+    position: absolute; top: 0; left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 2px;
+}
+.tooth {
+    width: 12px; height: 14px;
+    background: linear-gradient(to bottom, #fff, #eee); /* Dent légèrement ombrée en bas */
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: 0 0 4px 4px;
+}
+/* --- LES NOISETTES (ITEMS) --- */
+.game-item {
+    position: absolute;
+    top: -80px; /* Départ hors écran */
+    left: 0;
+    font-size: 50px;
+    line-height: 1;
+    user-select: none;
+    z-index: 1000; /* FORCE L'AFFICHAGE DEVANT TOUT */
+    
+    /* Animation définie par les keyframes ci-dessous */
+    animation: fall linear forwards; 
+}
+
+/* L'animation de chute */
+@keyframes fall {
+    0% { top: -80px; }
+    100% { top: 110vh; } /* Va jusqu'en bas de l'écran */
+}
+
+/* Effets visuels */
+.game-item.highlight {
+    filter: drop-shadow(0 0 10px yellow);
+    transform: scale(1.2);
+}
+
+.game-item.popped {
+    animation: pop 0.2s ease-out forwards;
+}
+
+/* Animations Keyframes */
+
+@keyframes pop {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.5); opacity: 0.8; }
+    100% { transform: scale(0); opacity: 0; }
+}
+
+/* Particules de score */
+.particle {
+    position: absolute;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    pointer-events: none;
+    animation: fadeOut 0.8s ease-out forwards;
+}
+
+@keyframes fadeOut {
+    0% { transform: translate(0, 0) scale(1); opacity: 1; }
+    100% { transform: translate(var(--vx), var(--vy)) scale(0); opacity: 0; }
+}
+
+
+/* --- MENU HOLO (STYLE CYBERPUNK) --- */
+
+.holo-container {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    
+    /* Fond sombre léger transparent + Grille TV Scanline */
+    background: radial-gradient(circle, rgba(0, 20, 40, 0.6) 0%, rgba(0, 0, 0, 0.9) 100%);
+    background-image: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 255, 255, 0.03) 3px,
+        rgba(0, 255, 255, 0.03) 4px
+    );
+    
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    pointer-events: auto !important; /* Pour capter les clics */
+}
+
+.holo-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 3.5rem; font-weight: 900;
+    color: #fff; letter-spacing: 8px;
+    margin-bottom: 60px;
+    text-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+}
+
+.holo-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 40px;
+    perspective: 1000px;
+}
+
+.holo-card {
+    position: relative;
+    width: 220px; height: 180px;
+    
+    /* Verre Givré */
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    
+    border-radius: 15px;
+    /* Coupe futuriste en bas à droite */
+    clip-path: polygon(0 0, 100% 0, 100% 85%, 85% 100%, 0 100%);
+    
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    overflow: hidden;
+}
+
+.holo-card:hover, .holo-card.virtual-hover {
+    transform: translateY(-10px) scale(1.05);
+    background: rgba(0, 255, 255, 0.1);
+    border-color: #00ffff;
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.4);
+}
+
+.holo-icon { font-size: 3.5rem; margin-bottom: 15px; filter: drop-shadow(0 0 10px rgba(255,255,255,0.3)); transition: 0.3s; }
+.holo-card:hover .holo-icon { transform: scale(1.2) rotate(5deg); }
+
+.holo-name { font-family: 'Orbitron'; color: #ccc; font-size: 0.9rem; letter-spacing: 2px; text-transform: uppercase; }
+.holo-card:hover .holo-name { color: #fff; text-shadow: 0 0 5px #00ffff; }
+
+/* Petite barre de scan qui passe */
+.holo-scanline {
+    position: absolute; top: 0; left: 0; width: 100%; height: 5px;
+    background: rgba(255, 255, 255, 0.5);
+    opacity: 0;
+    transition: 0.5s;
+}
+.holo-card:hover .holo-scanline {
+    opacity: 1;
+    top: 100%;
+    transition: top 1s linear, opacity 0.1s;
+}
+
+/* Couleurs spécifiques par jeu */
+.holo-card[data-id="game_nuts"]:hover { border-color: #e67e22; box-shadow: 0 0 20px #e67e22; background: rgba(230, 126, 34, 0.1); }
+.holo-card[data-id="fruit_blade"]:hover { border-color: #ff4757; box-shadow: 0 0 20px #ff4757; background: rgba(255, 71, 87, 0.1); }
+.holo-card[data-id="flappy_squat"]:hover { border-color: #f1c40f; box-shadow: 0 0 20px #f1c40f; background: rgba(241, 196, 15, 0.1); }
+
+/* --- MODALE GAME OVER --- */
+.modal-overlay {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.85); /* Fond sombre */
+    z-index: 2000; /* Au-dessus de tout */
+    
+    display: flex; justify-content: center; align-items: center;
+    opacity: 0; transition: opacity 0.3s ease;
+    backdrop-filter: blur(5px);
+}
+
+.modal-overlay.visible { opacity: 1; }
+
+.modal-box {
+    background: rgba(20, 20, 30, 0.95);
+    border: 2px solid #00ffff;
+    border-radius: 20px;
+    padding: 40px 60px;
+    text-align: center;
+    box-shadow: 0 0 50px rgba(0, 255, 255, 0.2);
+    transform: scale(0.8);
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.modal-overlay.visible .modal-box { transform: scale(1); }
+
+.modal-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 3rem; color: #ff4757; margin: 0 0 20px 0;
+    text-shadow: 0 0 20px rgba(255, 71, 87, 0.5);
+}
+
+.modal-score {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 2rem; color: white; margin-bottom: 40px;
+}
+
+.modal-actions {
+    display: flex; gap: 20px; justify-content: center;
+}
+
+.btn-modal {
+    background: transparent;
+    border: 2px solid white; color: white;
+    padding: 15px 30px; font-size: 1.2rem;
+    font-family: 'Orbitron'; cursor: pointer;
+    border-radius: 10px; transition: all 0.2s;
+}
+
+.btn-modal:hover {
+    background: white; color: black;
+    box-shadow: 0 0 20px white; transform: translateY(-3px);
+}
+
+#btn-retry { border-color: #00ff00; color: #00ff00; }
+#btn-retry:hover { background: #00ff00; color: black; box-shadow: 0 0 20px #00ff00; }
+
+#btn-menu { border-color: #ff0055; color: #ff0055; }
+#btn-menu:hover { background: #ff0055; color: white; box-shadow: 0 0 20px #ff0055; }
