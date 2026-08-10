@@ -1,7 +1,7 @@
 # 🕹️ JARVIS ARCADE
 
 Une borne d'arcade qui se joue **avec le corps** : la webcam suit vos mains,
-votre silhouette et votre visage, et pilote six mini-jeux. Aucune manette,
+votre silhouette et votre visage, et pilote dix mini-jeux. Aucune manette,
 aucun compte, aucune donnée qui sort du navigateur — tout tourne en local.
 
 Fonctionne aussi **à la souris**, sans caméra ni modèles installés.
@@ -23,6 +23,31 @@ Puis ouvrez <http://localhost:8000> et autorisez la caméra.
 
 **Pas de caméra ou pas envie de lancer `setup` ?** Le jeu le détecte, l'annonce
 et bascule en mode souris/clavier. Tous les jeux restent jouables.
+
+---
+
+## Les jeux
+
+| Jeu | Seul | À deux | Ce qu'on fait |
+| --- | :---: | :---: | --- |
+| **Air Hockey** | ✓ (contre la machine) | ✓ | La main est le maillet, premier à sept buts |
+| **Bulles** | ✓ | ✓ | Pincer pour crever les bulles, enchaîner pour multiplier |
+| **Fruit Blade** | ✓ | ✓ | Trancher les fruits du doigt, éviter les bombes |
+| **Neon Battle** | — | ✓ | Duel de raquettes, casser le mur adverse |
+| **Esquive laser** | ✓ | ✓ | Bouger pour éviter les rayons, tenir le plus longtemps |
+| **Neon Invaders** | ✓ | — | Se déplacer pour viser, lever les bras pour le super laser |
+| **Flappy Squat** | ✓ | ✓ | S'accroupir pour faire descendre l'oiseau |
+| **Séquence** | ✓ | ✓ | Retenir l'ordre des dalles et le refaire à la main |
+| **Shuriken Showdown** | ✓ | ✓ | Lancer d'un mouvement sec du bras |
+| **Noisettes** | ✓ | — | Attraper les noisettes en ouvrant la bouche |
+
+Le menu filtre entre **Tous**, **Seul** et **À deux** ; le bouton *Au hasard*
+choisit pour vous. À la souris, les flèches déplacent la sélection et `Entrée`
+lance la partie.
+
+Deuxième joueur : placez-vous simplement à droite de l'image (le joueur 1 tient
+la gauche). Sans caméra, la touche `P` active un joueur 2 au clavier. La touche
+`G` en mode webcam crée un joueur 2 « fantôme » pour tester un duel tout seul.
 
 ---
 
@@ -111,6 +136,7 @@ registerGame({
     icon: '🎯',                    // emoji de la carte
     color: '#8fa6b8',              // liseré coloré
     players: 2,                    // 1 ou 2
+    solo: true,                    // jouable seul ? (false = duel strict)
     description: 'Une phrase qui apparaît dans le menu.',
     class: MonJeu
 });
@@ -146,6 +172,7 @@ export class MonJeu extends Game {
 | `this.game.audio` | Musique et bruitages |
 | `this.setup({...})` | Caméra + IA à activer |
 | `this.after(ms, fn)` | `setTimeout` annulé automatiquement à la sortie du jeu |
+| `js/games/_shared.js` | HUD tout prêt : score, message centré, jauge, particules |
 
 Un joueur a toujours cette forme :
 
@@ -222,7 +249,7 @@ js/
 │   ├── Header.js
 │   ├── GameOverModal.js
 │   └── CaptureGallery.js
-├── games/            un fichier par jeu + index.js + _Template.js
+├── games/            un fichier par jeu + index.js, _Template.js, _shared.js
 └── vendor/           Three.js, MediaPipe, Howler (non modifiés)
 assets/               modèles IA et sons (voir assets/README.md)
 scripts/              téléchargement des modèles, serveur de dev

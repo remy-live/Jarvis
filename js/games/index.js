@@ -14,10 +14,19 @@
 
 export { MenuHolo } from './MenuHolo.js';
 
-import './NeonBrickBattle.js';
-import './NeonInvaders.js';
+// --- Duels et défis à la main ---
+import './AirHockey.js';
+import './BubblePop.js';
 import './FruitBlade.js';
+import './NeonBrickBattle.js';
+
+// --- Corps entier ---
+import './LaserDodge.js';
+import './NeonInvaders.js';
 import './FlappySquat.js';
+
+// --- Réflexion et visage ---
+import './MemoryPads.js';
 import './ShurikenShowdown.js';
 import './NutsGame.js';
 

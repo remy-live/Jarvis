@@ -16,12 +16,13 @@
  * Le menu se construit ensuite tout seul à partir de cette liste.
  */
 
-/** @typedef {{id:string,name:string,class:Function,icon:string,color:string,players:number,description:string,isMenu:boolean,hidden:boolean}} GameEntry */
+/** @typedef {{id:string,name:string,class:Function,icon:string,color:string,players:number,solo:boolean,description:string,isMenu:boolean,hidden:boolean}} GameEntry */
 
 const DEFAULTS = {
     icon: '🎮',
     color: '#8fa6b8',
-    players: 1,
+    players: 1,      // nombre maximum de joueurs
+    solo: true,      // jouable tout seul ? (faux pour un duel strict)
     description: '',
     isMenu: false,
     hidden: false

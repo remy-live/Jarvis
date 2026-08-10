@@ -470,6 +470,7 @@ registerGame({
     icon: '🧱',
     color: '#8fa6b8',
     players: 2,
+    solo: false, // la partie ne démarre qu'avec deux joueurs détectés
     description: 'Duel de raquettes : renvoyez la balle et cassez le mur adverse.',
     class: NeonBrickBattle
 });
