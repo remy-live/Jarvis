@@ -1,5 +1,5 @@
 import { HandLandmarker, PoseLandmarker, FaceLandmarker, FilesetResolver } from '../vendor/vision_bundle.js';
-import { CONFIG } from './Config.js';
+import { CONFIG } from '../core/Config.js';
 import { FallbackInput } from './FallbackInput.js';
 
 /**

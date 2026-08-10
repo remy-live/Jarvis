@@ -1,31 +1,34 @@
 /**
  * PALETTE PARTAGÉE
  *
- * Les mêmes valeurs que les variables CSS de style.css, disponibles côté
- * canvas (où l'on ne peut pas écrire `var(--accent)`). Changer une couleur
- * ici la change dans tous les jeux d'un coup.
+ * Mêmes valeurs que les variables CSS de style.css, mais utilisables côté
+ * canvas (où l'on ne peut pas écrire `var(--accent)`).
+ *
+ * Parti pris : des gris neutres légèrement chauds, deux accents désaturés
+ * (acier et sable) et aucune couleur pure. Rien ne « brille » : la
+ * lisibilité vient du contraste, pas de la saturation.
  */
 export const THEME = {
     /* Surfaces */
-    bg: '#080b0f',
-    surface: '#0f141b',
-    surfaceRaised: '#161d26',
+    bg: '#101214',
+    surface: '#171a1d',
+    surfaceRaised: '#1f2327',
 
     /* Texte */
-    textStrong: '#f2f6fa',
-    text: '#c3ccd8',
-    textMuted: '#7c8899',
+    textStrong: '#e7e9ec',
+    text: '#b6bbc2',
+    textMuted: '#7b8189',
 
-    /* Accents */
-    accent: '#7dd3fc',
-    accentWarm: '#fbbf24',
-    success: '#86efac',
-    danger: '#fb7185',
-    highlight: '#fde68a',
+    /* Accents (volontairement désaturés) */
+    accent: '#8fa6b8',        // acier
+    accentWarm: '#c2a882',    // sable
+    success: '#8faa8b',
+    danger: '#c08a86',
+    highlight: '#d6c9a8',
 
     /* Joueurs */
-    player1: '#7dd3fc',
-    player2: '#fbbf24',
+    player1: '#8fa6b8',
+    player2: '#c2a882',
 
     /* Typographie canvas */
     fontDisplay: "'Orbitron', system-ui, sans-serif",
@@ -36,4 +39,16 @@ export const THEME = {
 export const playerColor = (id) => (id === 0 ? THEME.player1 : THEME.player2);
 
 /** Voile sombre translucide, pour asseoir un HUD sur l'image caméra. */
-export const scrim = (alpha = 0.55) => `rgba(8, 11, 15, ${alpha})`;
+export const scrim = (alpha = 0.55) => `rgba(16, 18, 20, ${alpha})`;
+
+/**
+ * Variante d'une couleur du thème avec une opacité donnée.
+ * Évite d'écrire des `rgba()` en dur dans chaque jeu.
+ */
+export function alpha(hex, value) {
+    const int = parseInt(hex.slice(1), 16);
+    const r = (int >> 16) & 255;
+    const g = (int >> 8) & 255;
+    const b = int & 255;
+    return `rgba(${r}, ${g}, ${b}, ${value})`;
+}

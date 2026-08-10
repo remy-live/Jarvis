@@ -1,6 +1,6 @@
 import { Game } from '../core/Game.js';
 import { registerGame } from '../core/GameRegistry.js';
-import { GameOverModal } from '../core/GameOverModal.js';
+import { GameOverModal } from '../ui/GameOverModal.js';
 
 export class ShurikenShowdown extends Game {
     constructor(game) {
@@ -8,7 +8,7 @@ export class ShurikenShowdown extends Game {
         this.game = game;
         this.id = 'shuriken_showdown';
         this.name = 'SHURIKEN SHOWDOWN';
-        this.color = '#fb7185'; 
+        this.color = '#c08a86'; 
         this.isMenu = false;
 
         this.modal = new GameOverModal(this.game);
@@ -48,8 +48,8 @@ export class ShurikenShowdown extends Game {
         const h = this.game.display.virtH;
 
         this.playersState = [
-            this.createPlayer(0, '#3498db', 'BLUE', w * 0.15, h), // Cible à gauche
-            this.createPlayer(1, '#fb7185', 'RED', w * 0.85, h)   // Cible à droite
+            this.createPlayer(0, '#6d8ba3', 'BLUE', w * 0.15, h), // Cible à gauche
+            this.createPlayer(1, '#c08a86', 'RED', w * 0.85, h)   // Cible à droite
         ];
 
         this.projectiles = [];
@@ -275,7 +275,7 @@ export class ShurikenShowdown extends Game {
             // 3. MAIN (Curseur de Défense)
             // Cercle blanc pour la main
             ctx.fillStyle = 'white';
-            ctx.shadowColor = 'white'; ctx.shadowBlur = 10;
+            ctx.shadowColor = 'white'; ctx.shadowBlur = 0;
             ctx.beginPath(); ctx.arc(p.handPos.x, p.handPos.y, 15, 0, Math.PI*2); ctx.fill();
             ctx.shadowBlur = 0;
             
@@ -313,7 +313,7 @@ export class ShurikenShowdown extends Game {
     drawOrb(ctx, x, y, radius, color) {
         ctx.save();
         ctx.shadowColor = color;
-        ctx.shadowBlur = 30;
+        ctx.shadowBlur = 0;
 
         // Orbe extérieure
         ctx.fillStyle = color;
@@ -362,7 +362,7 @@ export class ShurikenShowdown extends Game {
         ctx.rotate(proj.rotation);
 
         ctx.fillStyle = '#ecf0f1'; 
-        ctx.shadowColor = proj.color; ctx.shadowBlur = 15;
+        ctx.shadowColor = proj.color; ctx.shadowBlur = 0;
 
         ctx.beginPath();
         const size = 30; 
@@ -404,7 +404,7 @@ registerGame({
     id: 'shuriken_showdown',
     name: 'SHURIKEN SHOWDOWN',
     icon: '🥷',
-    color: '#fb7185',
+    color: '#c08a86',
     players: 2,
     description: 'Lancez vos shurikens d\'un mouvement sec du bras.',
     class: ShurikenShowdown

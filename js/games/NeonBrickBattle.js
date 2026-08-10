@@ -1,5 +1,6 @@
 import { Game } from '../core/Game.js';
 import { registerGame } from '../core/GameRegistry.js';
+import { THEME, alpha } from '../core/Theme.js';
 
 export class NeonBrickBattle extends Game {
     constructor(game) {
@@ -20,8 +21,8 @@ export class NeonBrickBattle extends Game {
         this.ball = { x: 0, y: 0, vx: 0, vy: 0, trail: [] };
         this.ballSpeed = this.ballSpeedBase;
         
-        this.p1 = { score: 0, lives: 5, x: 0, y: 0, color: '#7dd3fc' }; 
-        this.p2 = { score: 0, lives: 5, x: 0, y: 0, color: '#fbbf24' };
+        this.p1 = { score: 0, lives: 5, x: 0, y: 0, color: '#8fa6b8' }; 
+        this.p2 = { score: 0, lives: 5, x: 0, y: 0, color: '#c2a882' };
         this.winner = null;
 
         this.bricks = [];
@@ -37,7 +38,7 @@ export class NeonBrickBattle extends Game {
     }
 
     enter() {
-        this.game.display.setBackground("black"); 
+        this.game.display.setBackground(THEME.bg); 
         if(this.game.inputs.setSmoothing) this.game.inputs.setSmoothing(0.85);
         this.resetGame();
     }
@@ -74,7 +75,7 @@ export class NeonBrickBattle extends Game {
         const startX = (w - totalW) / 2;
         const startY = (h - (rows * (brickH + gap))) / 2;
 
-        const colors = ['#fb7185', '#55ff00', '#7dd3fc', '#fde68a'];
+        const colors = ['#c08a86', '#8faa8b', '#8fa6b8', '#d6c9a8'];
 
         for (let c = 0; c < cols; c++) {
             for (let r = 0; r < rows; r++) {
@@ -217,7 +218,7 @@ export class NeonBrickBattle extends Game {
                 this.ballSpeed += 25; 
                 
                 this.triggerShake(10);
-                this.spawnParticles(nextX, nextY, "white", 5);
+                this.spawnParticles(nextX, nextY, THEME.textStrong, 5);
                 
                 if(this.game.audio) this.game.audio.playSFX('select');
                 return true;
@@ -370,7 +371,7 @@ export class NeonBrickBattle extends Game {
 
         // 2. Cœur Blanc (un peu plus petit)
         ctx.fillStyle = "white";
-        ctx.shadowColor = "white"; ctx.shadowBlur = 15; // Glow néon
+        ctx.shadowColor = "white"; ctx.shadowBlur = 0; // Glow néon
         ctx.beginPath(); 
         ctx.arc(this.ball.x, this.ball.y, this.ballRadius * 0.7, 0, Math.PI*2);
         ctx.fill();
@@ -435,20 +436,22 @@ export class NeonBrickBattle extends Game {
         ctx.restore();
     }
 
-    drawGlowRect(ctx, x, y, w, h, color, blur = 20) {
+    /**
+     * Bloc plein, bordé de sa propre couleur.
+     * (Anciennement un rectangle à halo néon : on lui préfère un aplat
+     * sobre, la couleur suffit à distinguer les briques.)
+     */
+    drawGlowRect(ctx, x, y, w, h, color, radius = 4) {
         ctx.save();
-        ctx.fillStyle = color;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = blur;
-        
-        // Bordure blanche + Ombre noire interne pour contraste max
-        ctx.strokeStyle = "white";
-        ctx.lineWidth = 3;
-        ctx.strokeRect(x, y, w, h);
-        
-        ctx.fillStyle = "rgba(0,0,0,0.2)"; // Légèrement sombre dedans pour la transparence
-        ctx.fillRect(x, y, w, h);
-        
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, radius);
+
+        ctx.fillStyle = alpha(color, 0.22);
+        ctx.fill();
+
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
         ctx.restore();
     }
 
@@ -465,7 +468,7 @@ registerGame({
     id: 'neon_bricks_vs',
     name: 'NEON BATTLE',
     icon: '🧱',
-    color: '#38bdf8',
+    color: '#8fa6b8',
     players: 2,
     description: 'Duel de raquettes : renvoyez la balle et cassez le mur adverse.',
     class: NeonBrickBattle

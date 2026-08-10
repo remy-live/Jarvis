@@ -75,7 +75,7 @@ registerGame({
     id: 'template_game',
     name: 'MON JEU',
     icon: '🎯',
-    color: '#7dd3fc',
+    color: '#8fa6b8',
     players: 1,
     description: 'Décrivez le jeu en une phrase, elle s\'affiche dans le menu.',
     hidden: true, // passez à false pour le faire apparaître dans le menu

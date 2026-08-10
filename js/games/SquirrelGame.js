@@ -6,7 +6,7 @@ export class SquirrelGame {
         this.id = 'squirrel_nuts';
         this.name = 'LA MÂCHOIRE DE L\'ÉCUREUIL';
         this.game = game;
-        this.color = '#8B4513'; // Marron écureuil
+        this.color = '#6b4a30'; // Marron écureuil
 
         // --- Config ---
         this.worldW = 32; // Largeur du monde 3D visible
@@ -194,7 +194,7 @@ export class SquirrelGame {
         ctx.fillText(`🌰 NOISETTES: ${this.score}`, 32, 62);
         
         // Texte couleur noisette
-        ctx.fillStyle = "#CD853F";
+        ctx.fillStyle = "#a98a62";
         ctx.fillText(`🌰 NOISETTES: ${this.score}`, 30, 60);
 
         // Instructions si le score est faible
@@ -229,7 +229,7 @@ registerGame({
     id: 'squirrel_nuts',
     name: "LA MÂCHOIRE DE L'ÉCUREUIL",
     icon: '🌰',
-    color: '#a16207',
+    color: '#8a7550',
     players: 1,
     hidden: true, // prototype 3D, pas encore dans le menu
     class: SquirrelGame

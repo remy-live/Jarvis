@@ -1,6 +1,6 @@
 import { Game } from '../core/Game.js';
 import { registerGame } from '../core/GameRegistry.js';
-import { GameOverModal } from '../core/GameOverModal.js';
+import { GameOverModal } from '../ui/GameOverModal.js';
 
 export class FlappySquat extends Game {
     constructor(game) {
@@ -8,7 +8,7 @@ export class FlappySquat extends Game {
         this.game = game;
         this.id = 'flappy_squat';
         this.name = 'FLAPPY SQUAT DUO';
-        this.color = '#fbbf24'; 
+        this.color = '#c2a882'; 
         this.isMenu = false;
 
         this.modal = new GameOverModal(this.game);
@@ -59,9 +59,9 @@ export class FlappySquat extends Game {
         this.gameState = 'WAITING';
         this.playersState = [
             // J1 : Jaune (Poussin)
-            this.createPlayerState(0, '#fbbf24', '#e67e22'), 
+            this.createPlayerState(0, '#c2a882', '#b58150'), 
             // J2 : Rouge (Perroquet)
-            this.createPlayerState(1, '#fb7185', '#2c3e50') 
+            this.createPlayerState(1, '#c08a86', '#2c3e50') 
         ];
         this.pipeSpawnTimer = -2.0; 
         this.pipeFrequency = 2.2; 
@@ -299,7 +299,7 @@ export class FlappySquat extends Game {
         const halfW = w / 2;
 
         const skyGrad = ctx.createLinearGradient(0, 0, 0, h);
-        skyGrad.addColorStop(0, '#3498db'); skyGrad.addColorStop(1, '#87ceeb'); 
+        skyGrad.addColorStop(0, '#6d8ba3'); skyGrad.addColorStop(1, '#a8bcc9'); 
         ctx.fillStyle = skyGrad; ctx.fillRect(0, 0, w, h);
 
         this.drawClouds(ctx);
@@ -362,7 +362,7 @@ export class FlappySquat extends Game {
         ctx.fill();
 
         // 4. Bec (Triangle Orange)
-        ctx.fillStyle = '#e67e22';
+        ctx.fillStyle = '#b58150';
         ctx.beginPath();
         ctx.moveTo(b.width/2, 0); // Pointe
         ctx.lineTo(b.width/2 + 15, 5); 
@@ -406,14 +406,14 @@ export class FlappySquat extends Game {
         ctx.textAlign = 'center';
         if (this.gameState === 'WAITING') {
              ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(w/2 - 300, h/2 - 60, 600, 120);
-             ctx.fillStyle = '#fbbf24'; ctx.font = '900 40px Arial';
+             ctx.fillStyle = '#c2a882'; ctx.font = '900 40px Arial';
              ctx.fillText("SQUATTEZ POUR DÉMARRER !", w/2, h/2 + 15);
         }
     }
     
     drawPipe(ctx, p) { 
         const grad = ctx.createLinearGradient(p.x, 0, p.x + p.width, 0);
-        grad.addColorStop(0, '#558c22'); grad.addColorStop(0.3, '#9ce659'); grad.addColorStop(1, '#73bf2e'); 
+        grad.addColorStop(0, '#5c6b4c'); grad.addColorStop(0.3, '#93a97f'); grad.addColorStop(1, '#7b8f66'); 
         ctx.fillStyle = grad; ctx.fillRect(p.x, p.y, p.width, p.height);
         ctx.strokeStyle = '#2d4d12'; ctx.lineWidth = 4; ctx.strokeRect(p.x, p.y, p.width, p.height);
         
@@ -424,7 +424,7 @@ export class FlappySquat extends Game {
 
     drawGround(ctx, w, h) { 
         ctx.fillStyle = '#ded895'; ctx.fillRect(0, h - this.groundHeight, w, this.groundHeight); 
-        ctx.fillStyle = '#73bf2e'; ctx.fillRect(0, h - this.groundHeight, w, 20);
+        ctx.fillStyle = '#7b8f66'; ctx.fillRect(0, h - this.groundHeight, w, 20);
     }
 
     drawClouds(ctx) { 
@@ -440,7 +440,7 @@ registerGame({
     id: 'flappy_squat',
     name: 'FLAPPY SQUAT',
     icon: '🦅',
-    color: '#facc15',
+    color: '#c2a882',
     players: 2,
     description: 'Accroupissez-vous pour faire descendre l\'oiseau.',
     class: FlappySquat

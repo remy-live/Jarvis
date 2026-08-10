@@ -1,6 +1,7 @@
 import { Game } from '../core/Game.js';
 import { Registry, registerGame } from '../core/GameRegistry.js';
 import { CONFIG } from '../core/Config.js';
+import { THEME } from '../core/Theme.js';
 
 /**
  * MENU PRINCIPAL
@@ -26,7 +27,7 @@ export class MenuHolo extends Game {
             smoothing: CONFIG.input.menuSmoothing
         });
 
-        this.game.display.setBackground('var(--surface-0)');
+        this.game.display.setBackground(THEME.bg);
 
         const layer = this.game.display.gameLayer;
         layer.innerHTML = '';
@@ -65,8 +66,8 @@ export class MenuHolo extends Game {
         const hint = document.createElement('p');
         hint.className = 'menu__hint';
         hint.textContent = this.game.inputs.mode === 'vision'
-            ? 'Pointez une carte et gardez la main immobile · C photo · V vue caméra · F perfs'
-            : 'Mode souris · clic pour valider · C photo · P joueur 2 · Espace bras levés · E bouche';
+            ? 'Pointez une carte et gardez la main immobile · C photo · R vidéo · G pellicule · V vue caméra'
+            : 'Mode souris · clic pour valider · C photo · R vidéo · G pellicule · P joueur 2';
         container.appendChild(hint);
 
         return container;
@@ -117,7 +118,7 @@ registerGame({
     id: 'menu_holo',
     name: 'MENU PRINCIPAL',
     icon: '🏠',
-    color: '#7dd3fc',
+    color: '#8fa6b8',
     isMenu: true,
     class: MenuHolo
 });

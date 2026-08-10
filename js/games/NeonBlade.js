@@ -299,7 +299,7 @@ export class NeonBlade {
         const ctx = display.ctx;
         ctx.save();
         ctx.font = "bold 60px 'Orbitron'";
-        ctx.fillStyle = "#7dd3fc";
+        ctx.fillStyle = "#8fa6b8";
         ctx.strokeStyle = "rgba(0,0,0,0.5)";
         ctx.lineWidth = 4;
         ctx.textAlign = "center";
@@ -329,7 +329,7 @@ registerGame({
     id: 'neon_blade',
     name: 'NEON BLADE',
     icon: '⚔️',
-    color: '#22d3ee',
+    color: '#8fa6b8',
     players: 1,
     hidden: true, // prototype 3D, pas encore dans le menu
     class: NeonBlade

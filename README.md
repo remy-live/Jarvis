@@ -41,10 +41,11 @@ et bascule en mode souris/clavier. Tous les jeux restent jouables.
 
 | Touche | Effet |
 | --- | --- |
-| `C` | Prendre une photo (compte à rebours de 3 s) |
+| `C` | Photo (compte à rebours de 3 s) |
+| `R` | Démarrer / arrêter l'enregistrement vidéo |
+| `G` | Ouvrir la pellicule |
 | `M` / `Échap` | Revenir au menu |
 | `V` | Vignette caméra ↔ plein écran |
-| `G` | Joueur 2 « fantôme » (duplique le joueur 1, pratique pour tester le 2 joueurs seul) |
 | `F` | Compteur FPS et coût de l'IA |
 
 ### En mode souris
@@ -57,23 +58,41 @@ et bascule en mode souris/clavier. Tous les jeux restent jouables.
 | `E` | Ouvrir la bouche |
 | `P` | Activer le joueur 2 (flèches, `Entrée` = pincer, `Maj droite` = bras levés) |
 
+En mode souris, le pointeur du système suffit : le curseur virtuel et sa
+validation par survol sont désactivés pour le joueur 1 (sinon un simple arrêt
+de la souris sur un bouton déclencherait un clic). Le joueur 2, piloté au
+clavier, garde le sien.
+
 ---
 
-## 📷 Photo
+## 📷 Photo et vidéo
 
-Le bouton 📷 du bandeau (ou la touche `C`) lance un compte à rebours, un flash,
-puis affiche l'aperçu avec **Enregistrer / Reprendre / Fermer**.
+Trois boutons dans le bandeau, ou trois touches :
 
-L'image fusionne tout ce qui est à l'écran : le flux webcam, la scène 3D et le
-HUD du jeu. Le compteur de performances, lui, n'y apparaît pas. Le fichier est
-enregistré en PNG (`jarvis-arcade-AAAA-MM-JJ-hh-mm-ss.png`) ; rien n'est envoyé
-sur un serveur.
+| | Action |
+| --- | --- |
+| ⏺ / `R` | Démarre puis arrête un clip vidéo (chrono affiché à l'écran) |
+| 📷 / `C` | Photo, après un compte à rebours de 3 secondes |
+| 🖼 / `G` | Ouvre la **pellicule** de la session |
+
+La pellicule montre la dernière capture en grand et toutes les autres en
+vignettes : on choisit, on **enregistre** ou on **supprime**. Les photos
+sortent en PNG, les clips en WebM (MP4 sur Safari), nommés
+`jarvis-arcade-AAAA-MM-JJ-hhmmss.<ext>`.
+
+Photo comme vidéo passent par le même compositeur : elles fusionnent le flux
+webcam, la scène 3D et le HUD, exactement comme à l'écran. Le compte à rebours,
+le témoin d'enregistrement et le compteur de performances en sont exclus. Rien
+ne sort du navigateur : les clips vivent en mémoire jusqu'à ce que vous les
+téléchargiez.
 
 Depuis un jeu :
 
 ```js
-this.game.photoBooth.start();   // avec compte à rebours
-this.game.photoBooth.capture(); // immédiat
+this.game.capture.photo();            // avec compte à rebours
+this.game.capture.photo(0);           // immédiat
+this.game.capture.toggleRecording();  // vidéo
+this.game.capture.openGallery();
 ```
 
 ---
@@ -90,7 +109,7 @@ registerGame({
     id: 'mon_jeu',                 // identifiant unique
     name: 'MON JEU',               // titre affiché
     icon: '🎯',                    // emoji de la carte
-    color: '#7dd3fc',              // liseré coloré
+    color: '#8fa6b8',              // liseré coloré
     players: 2,                    // 1 ou 2
     description: 'Une phrase qui apparaît dans le menu.',
     class: MonJeu
@@ -182,26 +201,37 @@ index.html            page unique
 style.css             thème (variables CSS en haut du fichier)
 js/
 ├── main.js           séquence de démarrage
-├── core/
+├── core/             le moteur, sans dépendance à l'interface
 │   ├── Config.js         tous les réglages
 │   ├── Theme.js          palette partagée côté canvas
-│   ├── Engine.js         boucle de jeu, curseur, chargement des scènes
+│   ├── Engine.js         boucle de jeu et orchestration
 │   ├── Display.js        couches d'affichage (2D, 3D, DOM)
-│   ├── InputSystem.js    webcam + MediaPipe → joueurs
-│   ├── FallbackInput.js  souris/clavier → mêmes joueurs
-│   ├── PhotoBooth.js     capture photo
-│   ├── Stats.js          compteur de performances
 │   ├── Game.js           classe de base des jeux
 │   ├── GameRegistry.js   catalogue
-│   ├── GameOverModal.js  écran de fin de partie
-│   ├── Header.js         bandeau supérieur
-│   └── AudioManager.js   musique et bruitages
-├── games/            un fichier par jeu + index.js (catalogue) + _Template.js
+│   ├── AudioManager.js   musique et bruitages
+│   └── Stats.js          compteur de performances
+├── input/            tout ce qui produit des « joueurs »
+│   ├── InputSystem.js      webcam + MediaPipe
+│   ├── FallbackInput.js    souris/clavier, même format de sortie
+│   └── CursorController.js curseur virtuel et validation par survol
+├── capture/          photo et vidéo
+│   ├── FrameComposer.js  fusionne les calques en une image
+│   ├── VideoRecorder.js  MediaRecorder sur le canvas composé
+│   └── CaptureStudio.js  orchestration photo + vidéo + pellicule
+├── ui/               écrans et panneaux
+│   ├── Header.js
+│   ├── GameOverModal.js
+│   └── CaptureGallery.js
+├── games/            un fichier par jeu + index.js + _Template.js
 └── vendor/           Three.js, MediaPipe, Howler (non modifiés)
 assets/               modèles IA et sons (voir assets/README.md)
 scripts/              téléchargement des modèles, serveur de dev
 legacy/               anciens prototypes, conservés pour référence
 ```
+
+Le découpage suit une règle simple : `core/` ne connaît pas le DOM applicatif,
+`input/` ne connaît pas les jeux, `capture/` ne connaît pas les entrées, et
+`ui/` ne fait que du DOM. Chaque module a une seule raison de changer.
 
 ---
 
@@ -209,8 +239,12 @@ legacy/               anciens prototypes, conservés pour référence
 
 Tout est dans `js/core/Config.js` : cadence de l'IA, résolution d'analyse,
 lissage du curseur, durée de validation par survol, compte à rebours photo,
-volumes. Les couleurs sont dans les variables CSS en haut de `style.css` et
-dans `js/core/Theme.js` pour les jeux dessinés au canvas.
+débit vidéo, volumes.
+
+Les couleurs vivent à deux endroits qui se répondent : les variables CSS en
+haut de `style.css` pour l'interface, et `js/core/Theme.js` pour tout ce qui
+est dessiné au canvas. Les deux listes portent les mêmes valeurs — changer un
+accent des deux côtés suffit à reteinter l'ensemble.
 
 ---
 
@@ -224,6 +258,7 @@ dans `js/core/Theme.js` pour les jeux dessinés au canvas.
 | Le curseur tremble | Montez `smoothing` dans `Config.js` (vers 1 = plus nerveux, vers 0 = plus lisse) |
 | Les jeux rament | `F` pour diagnostiquer, puis baissez `maxFps` ou la résolution d'analyse |
 | Aucun son | Les fichiers de `assets/sounds/` sont optionnels et absents par défaut |
+| « Vidéo non supportée » | Navigateur sans MediaRecorder — la photo, elle, fonctionne partout |
 
 ---
 

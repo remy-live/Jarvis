@@ -43,7 +43,7 @@ export class NutsGame extends Game {
 
     enter() {
         console.log("🐿️ NOISETTES: Démarrage");
-        this.game.display.setBackground("linear-gradient(to bottom, #87CEEB 0%, #E0F7FA 100%)");
+        this.game.display.setBackground("linear-gradient(to bottom, #a8bcc9 0%, #E0F7FA 100%)");
         this.game.audio.setupGameAudio(this.audioConfig); 
         
         // CRÉATION DU MASQUE DOM
@@ -235,7 +235,7 @@ export class NutsGame extends Game {
             this.game.audio.playSFX('crunch');
         }
         
-        createParticles(x, y, '#D2691E', this.domLayer);
+        createParticles(x, y, '#a9764b', this.domLayer);
         
         // Feedback visuel sur le masque
         if(this.mask) {
@@ -271,7 +271,7 @@ registerGame({
     id: 'game_nuts',
     name: 'NOISETTES',
     icon: '🐿️',
-    color: '#f59e0b',
+    color: '#c2a882',
     players: 1,
     description: 'Attrapez les noisettes en ouvrant la bouche.',
     class: NutsGame

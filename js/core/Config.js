@@ -59,12 +59,15 @@ export const CONFIG = {
         maxDelta: 1 / 20
     },
 
-    /* --- PHOTOMATON --- */
-    photo: {
-        countdown: 3,           // secondes avant le déclenchement
-        historySize: 12,        // photos gardées en mémoire pour la session
-        maxPixelRatio: 2,       // qualité de l'image exportée
-        background: '#080b0f'
+    /* --- CAPTURE (photo + vidéo) --- */
+    capture: {
+        countdown: 3,            // secondes avant le déclenchement d'une photo
+        historySize: 12,         // captures gardées en mémoire pour la session
+        photoPixelRatio: 2,      // finesse de la photo exportée
+        videoPixelRatio: 1,      // la vidéo privilégie la fluidité
+        videoFps: 30,
+        videoBitrate: 6_000_000, // ~6 Mb/s : net sans fichier démesuré
+        background: '#101214'
     },
 
     /* --- AUDIO --- */

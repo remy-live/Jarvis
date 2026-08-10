@@ -259,7 +259,7 @@ registerGame({
     id: 'menu_paper',
     name: 'MENU PAPIER',
     icon: '📄',
-    color: '#e5e7eb',
+    color: '#c9ccd1',
     isMenu: true,
     hidden: true,
     class: MenuPaper

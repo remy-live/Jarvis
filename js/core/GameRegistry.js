@@ -7,7 +7,7 @@
  *         id: 'mon_jeu',
  *         name: 'MON JEU',
  *         icon: '🎯',
- *         color: '#7dd3fc',
+ *         color: '#8fa6b8',
  *         players: 2,
  *         description: 'Une phrase pour le menu.',
  *         class: MonJeu
@@ -20,7 +20,7 @@
 
 const DEFAULTS = {
     icon: '🎮',
-    color: '#7dd3fc',
+    color: '#8fa6b8',
     players: 1,
     description: '',
     isMenu: false,

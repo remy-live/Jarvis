@@ -20,7 +20,7 @@ class Blade {
         if (this.points.length < 2) return;
         ctx.save();
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-        ctx.shadowBlur = 20; ctx.shadowColor = this.color;
+        ctx.shadowBlur = 0; ctx.shadowColor = this.color;
 
         for (let i = 0; i < this.points.length - 1; i++) {
             const p1 = this.points[i];
@@ -76,9 +76,9 @@ class Fruit {
         this.rotSpeed = (Math.random() - 0.5) * 0.05 * 60;
 
         const types = [
-            { icon: '🍉', color: '#fb7185', score: 10 },
-            { icon: '🍌', color: '#fbbf24', score: 10 },
-            { icon: '🍍', color: '#f39c12', score: 20 },
+            { icon: '🍉', color: '#c08a86', score: 10 },
+            { icon: '🍌', color: '#c2a882', score: 10 },
+            { icon: '🍍', color: '#c39a5e', score: 20 },
             { icon: '🥥', color: '#ecf0f1', score: 30 },
             { icon: '💣', color: '#000000', score: -50, isBomb: true }
         ];
@@ -133,7 +133,7 @@ export class FruitBlade extends Game {
         this.ctx = this.game.display.ctx;
         this.fruits = [];
         this.particles = [];
-        this.blades = [new Blade('#7dd3fc'), new Blade('#fbbf24')]; 
+        this.blades = [new Blade('#8fa6b8'), new Blade('#c2a882')]; 
         
         this.scores = [0, 0];
         this.timer = 60; 
@@ -352,7 +352,7 @@ export class FruitBlade extends Game {
         ctx.textAlign = "center"; // IMPORTANT : On centre tout par défaut
 
         // TIMER (Au milieu absolu)
-        ctx.fillStyle = this.timer < 10 ? "#fb7185" : "white";
+        ctx.fillStyle = this.timer < 10 ? "#c08a86" : "white";
         ctx.shadowColor = "black"; ctx.shadowBlur = 10;
         ctx.font = "bold 70px 'Orbitron'";
         ctx.fillText(Math.ceil(this.timer), midX, topY);
@@ -360,14 +360,14 @@ export class FruitBlade extends Game {
         // SCORE P1 (Centré dans la zone gauche : 25% de la largeur)
         // Reset Font
         ctx.font = "bold 50px 'Orbitron'";
-        ctx.fillStyle = "#7dd3fc"; // Cyan
-        ctx.shadowColor = "#7dd3fc"; ctx.shadowBlur = 15;
+        ctx.fillStyle = "#8fa6b8"; // Cyan
+        ctx.shadowColor = "#8fa6b8"; ctx.shadowBlur = 0;
         // w * 0.25 = Le centre exact de la moitié gauche
         ctx.fillText(`${this.scores[0]}`, w * 0.25, topY);
 
         // SCORE P2 (Centré dans la zone droite : 75% de la largeur)
-        ctx.fillStyle = "#fbbf24"; // Magenta
-        ctx.shadowColor = "#fbbf24";
+        ctx.fillStyle = "#c2a882"; // Magenta
+        ctx.shadowColor = "#c2a882";
         // w * 0.75 = Le centre exact de la moitié droite
         ctx.fillText(`${this.scores[1]}`, w * 0.75, topY);
 
@@ -393,11 +393,11 @@ export class FruitBlade extends Game {
             
             let winner = "EGALITE";
             let color = "white";
-            if (this.scores[0] > this.scores[1]) { winner = "P1 GAGNE !"; color = "#7dd3fc"; }
-            if (this.scores[1] > this.scores[0]) { winner = "P2 GAGNE !"; color = "#fbbf24"; }
+            if (this.scores[0] > this.scores[1]) { winner = "P1 GAGNE !"; color = "#8fa6b8"; }
+            if (this.scores[1] > this.scores[0]) { winner = "P2 GAGNE !"; color = "#c2a882"; }
             
             ctx.fillStyle = color;
-            ctx.shadowColor = color; ctx.shadowBlur = 20;
+            ctx.shadowColor = color; ctx.shadowBlur = 0;
             ctx.font = "bold 60px Arial";
             ctx.fillText(winner, w/2, h/2 + 70);
         }
@@ -408,7 +408,7 @@ registerGame({
     id: 'fruit_blade',
     name: 'FRUIT BLADE',
     icon: '🍉',
-    color: '#f87171',
+    color: '#c08a86',
     players: 2,
     description: 'Tranchez les fruits du doigt, évitez les bombes.',
     class: FruitBlade

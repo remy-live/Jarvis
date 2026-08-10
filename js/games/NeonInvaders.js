@@ -1,6 +1,6 @@
 import { Game } from '../core/Game.js';
 import { registerGame } from '../core/GameRegistry.js';
-import { GameOverModal } from '../core/GameOverModal.js';
+import { GameOverModal } from '../ui/GameOverModal.js';
 
 export class NeonInvaders extends Game {
     constructor(game) {
@@ -44,7 +44,7 @@ export class NeonInvaders extends Game {
             x: w / 2,
             y: h - 80,
             width: 40, height: 40,
-            color: '#7dd3fc',
+            color: '#8fa6b8',
             superMode: false,
             superTimer: 0,
             cooldown: 0
@@ -167,7 +167,7 @@ export class NeonInvaders extends Game {
                 isSuper: this.ship.superMode,
                 w: this.ship.superMode ? 10 : 4,
                 h: 15,
-                color: this.ship.superMode ? '#fbbf24' : '#fde68a'
+                color: this.ship.superMode ? '#c2a882' : '#d6c9a8'
             });
         }
 
@@ -191,7 +191,7 @@ export class NeonInvaders extends Game {
                     
                     e.alive = false;
                     this.score += 10;
-                    this.spawnParticles(e.x, e.y, '#86efac');
+                    this.spawnParticles(e.x, e.y, '#8faa8b');
                     if(this.game.audio) this.game.audio.playSFX('crunch');
 
                     if (!b.isSuper) {
@@ -301,7 +301,7 @@ export class NeonInvaders extends Game {
         // Balles
         this.bullets.forEach(b => {
             ctx.fillStyle = b.color;
-            ctx.shadowColor = b.color; ctx.shadowBlur = 10;
+            ctx.shadowColor = b.color; ctx.shadowBlur = 0;
             ctx.fillRect(b.x - b.w/2, b.y, b.w, b.h);
             ctx.shadowBlur = 0;
         });
@@ -334,17 +334,17 @@ export class NeonInvaders extends Game {
             const pct = 1 - (this.ship.cooldown / 10);
             ctx.fillStyle = "#333";
             ctx.fillRect(w - 220, 20, 200, 20);
-            ctx.fillStyle = "#fbbf24";
+            ctx.fillStyle = "#c2a882";
             ctx.fillRect(w - 220, 20, 200 * pct, 20);
             ctx.font = "15px Arial"; ctx.fillStyle = "white";
             ctx.fillText("RECHARGE...", w - 210, 35);
         } else if (this.ship.superMode) {
-             ctx.fillStyle = "#fbbf24";
-             ctx.shadowColor = "#fbbf24"; ctx.shadowBlur = 20;
+             ctx.fillStyle = "#c2a882";
+             ctx.shadowColor = "#c2a882"; ctx.shadowBlur = 0;
              ctx.fillText("SUPER LASER !!!", w - 250, 40);
              ctx.shadowBlur = 0;
         } else {
-             ctx.fillStyle = "#86efac";
+             ctx.fillStyle = "#8faa8b";
              ctx.fillText("PRÊT ! (🙌)", w - 250, 40);
         }
     }
@@ -362,7 +362,7 @@ export class NeonInvaders extends Game {
 
         ctx.fillStyle = this.ship.color;
         ctx.shadowColor = this.ship.color;
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 0;
         
         ctx.beginPath();
         ctx.moveTo(0, -20);
@@ -373,7 +373,7 @@ export class NeonInvaders extends Game {
         ctx.fill();
 
         // Réacteurs
-        ctx.fillStyle = this.ship.superMode ? "#fbbf24" : "#fb923c";
+        ctx.fillStyle = this.ship.superMode ? "#c2a882" : "#c39064";
         ctx.beginPath();
         ctx.moveTo(-10, 20); ctx.lineTo(-15, 30 + Math.random()*10); ctx.lineTo(-5, 20);
         ctx.moveTo(10, 20); ctx.lineTo(15, 30 + Math.random()*10); ctx.lineTo(5, 20);
@@ -399,7 +399,7 @@ registerGame({
     id: 'neon_invaders',
     name: 'NEON INVADERS',
     icon: '👾',
-    color: '#a78bfa',
+    color: '#9d95b8',
     players: 1,
     description: 'Déplacez-vous pour viser, levez les bras pour le super laser.',
     class: NeonInvaders

@@ -1,6 +1,6 @@
 import { CONFIG } from './core/Config.js';
 import { Display } from './core/Display.js';
-import { InputSystem } from './core/InputSystem.js';
+import { InputSystem } from './input/InputSystem.js';
 import { Engine } from './core/Engine.js';
 
 // Catalogue des jeux : pour en ajouter un, tout se passe dans ce fichier.
@@ -61,7 +61,10 @@ class JarvisArcade {
             <span class="boot-keys">clic</span> = valider<br>
             <span class="boot-keys">Espace</span> = bras levés &nbsp;
             <span class="boot-keys">E</span> = ouvrir la bouche &nbsp;
-            <span class="boot-keys">P</span> = joueur 2 (flèches)
+            <span class="boot-keys">P</span> = joueur 2 (flèches)<br>
+            <span class="boot-keys">C</span> = photo &nbsp;
+            <span class="boot-keys">R</span> = vidéo &nbsp;
+            <span class="boot-keys">G</span> = pellicule
         `;
         this.errorBox.hidden = false;
         this.continueBtn.textContent = 'JOUER À LA SOURIS';

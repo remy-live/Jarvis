@@ -1,5 +1,5 @@
-import { CONFIG } from './Config.js';
-import { THEME } from './Theme.js';
+import { CONFIG } from '../core/Config.js';
+import { THEME } from '../core/Theme.js';
 
 /**
  * MODALE DE FIN DE PARTIE
