@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Registry } from '../core/GameRegistry.js';
+import { registerGame } from '../core/GameRegistry.js';
 
 export class SquirrelGame {
     constructor(game) {
@@ -225,4 +225,12 @@ export class SquirrelGame {
     }
 }
 
-Registry.register('squirrel_nuts',"LA MÂCHOIRE DE L'ÉCUREUIL", SquirrelGame, "#8B4513");
+registerGame({
+    id: 'squirrel_nuts',
+    name: "LA MÂCHOIRE DE L'ÉCUREUIL",
+    icon: '🌰',
+    color: '#a16207',
+    players: 1,
+    hidden: true, // prototype 3D, pas encore dans le menu
+    class: SquirrelGame
+});

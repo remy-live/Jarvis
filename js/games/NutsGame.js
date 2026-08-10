@@ -1,5 +1,5 @@
 import { Game } from '../core/Game.js';
-import { Registry } from '../core/GameRegistry.js';
+import { registerGame } from '../core/GameRegistry.js';
 import { spawnItem, createParticles } from './utils_2d.js';
 import { AudioManager } from '../core/AudioManager.js';
 
@@ -267,4 +267,12 @@ export class NutsGame extends Game {
     }
 }
 
-Registry.register('game_nuts', "NOISETTES EXPRESSIVE", NutsGame, "#e67e22");
+registerGame({
+    id: 'game_nuts',
+    name: 'NOISETTES',
+    icon: '🐿️',
+    color: '#f59e0b',
+    players: 1,
+    description: 'Attrapez les noisettes en ouvrant la bouche.',
+    class: NutsGame
+});

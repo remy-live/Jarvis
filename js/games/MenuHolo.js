@@ -1,18 +1,13 @@
 import { Game } from '../core/Game.js';
-import { Registry } from '../core/GameRegistry.js';
+import { Registry, registerGame } from '../core/GameRegistry.js';
 import { CONFIG } from '../core/Config.js';
 
-/** Icône par défaut selon l'identifiant du jeu. */
-const ICONS = [
-    [/nuts|squirrel/, '🐿️'],
-    [/flappy/, '🦅'],
-    [/brick/, '🧱'],
-    [/invaders/, '👾'],
-    [/fruit/, '🍉'],
-    [/blade|shuriken/, '🥷'],
-    [/pong/, '🏓']
-];
-
+/**
+ * MENU PRINCIPAL
+ *
+ * Construit entièrement à partir du registre : icône, couleur, nombre de
+ * joueurs et description viennent de la déclaration de chaque jeu.
+ */
 export class MenuHolo extends Game {
     constructor(engine) {
         super(engine);
@@ -22,7 +17,7 @@ export class MenuHolo extends Game {
     }
 
     enter() {
-        // Caméra en fond : on se voit jouer, c'est l'effet "borne d'arcade"
+        // Caméra en fond : on se voit jouer, c'est l'effet « borne d'arcade »
         this.setup({
             cameraMode: 'fullscreen',
             hands: true,
@@ -31,70 +26,81 @@ export class MenuHolo extends Game {
             smoothing: CONFIG.input.menuSmoothing
         });
 
+        this.game.display.setBackground('var(--surface-0)');
+
         const layer = this.game.display.gameLayer;
         layer.innerHTML = '';
-
-        const container = document.createElement('div');
-        container.className = 'holo-container';
-
-        const title = document.createElement('div');
-        title.className = 'holo-title';
-        title.innerHTML = "JARVIS <span style='color:#00ffff'>ARCADE</span>";
-        container.appendChild(title);
-
-        const grid = document.createElement('div');
-        grid.className = 'holo-grid';
-
-        const games = Registry.getAll().filter((g) => !g.isMenu);
-        if (games.length === 0) {
-            const empty = document.createElement('div');
-            empty.className = 'holo-empty';
-            empty.textContent = "Aucun jeu enregistré — vérifiez les imports dans js/main.js";
-            grid.appendChild(empty);
-        }
-
-        for (const g of games) {
-            grid.appendChild(this._createCard(g));
-        }
-
-        container.appendChild(grid);
-
-        const hint = document.createElement('div');
-        hint.className = 'holo-hint';
-        hint.textContent = this.game.inputs.mode === 'vision'
-            ? 'Pointez une carte et maintenez pour valider · V = vue caméra · G = 2e joueur fantôme'
-            : 'Mode souris : cliquez une carte · P = joueur 2 · Espace = bras levés · E = bouche';
-        container.appendChild(hint);
-
-        layer.appendChild(container);
+        layer.appendChild(this._buildMenu());
 
         // Le moteur met en cache les éléments cliquables : on le prévient
         this.game.invalidateInteractives();
     }
 
-    _createCard(g) {
-        const card = document.createElement('div');
-        card.className = 'holo-card interactive';
-        card.dataset.id = g.id;
-        if (g.color) card.style.setProperty('--card-color', g.color);
+    _buildMenu() {
+        const container = document.createElement('div');
+        container.className = 'menu';
 
-        const icon = ICONS.find(([pattern]) => pattern.test(g.id))?.[1] || '🎮';
+        const header = document.createElement('header');
+        header.className = 'menu__head';
+        header.innerHTML = `
+            <p class="menu__eyebrow">Borne gestuelle</p>
+            <h1 class="menu__title">Jarvis <span>Arcade</span></h1>
+        `;
+        container.appendChild(header);
+
+        const grid = document.createElement('div');
+        grid.className = 'menu__grid';
+
+        const games = Registry.getPlayable();
+        if (games.length === 0) {
+            const empty = document.createElement('p');
+            empty.className = 'menu__empty';
+            empty.textContent = 'Aucun jeu déclaré — ajoutez son import dans js/games/index.js';
+            grid.appendChild(empty);
+        }
+
+        for (const entry of games) grid.appendChild(this._createCard(entry));
+        container.appendChild(grid);
+
+        const hint = document.createElement('p');
+        hint.className = 'menu__hint';
+        hint.textContent = this.game.inputs.mode === 'vision'
+            ? 'Pointez une carte et gardez la main immobile · C photo · V vue caméra · F perfs'
+            : 'Mode souris · clic pour valider · C photo · P joueur 2 · Espace bras levés · E bouche';
+        container.appendChild(hint);
+
+        return container;
+    }
+
+    _createCard(entry) {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'card interactive';
+        card.dataset.id = entry.id;
+        card.style.setProperty('--card-accent', entry.color);
 
         card.innerHTML = `
-            <div class="holo-icon">${icon}</div>
-            <div class="holo-name"></div>
-            <div class="holo-scanline"></div>
+            <span class="card__icon" aria-hidden="true"></span>
+            <span class="card__body">
+                <span class="card__name"></span>
+                <span class="card__desc"></span>
+            </span>
+            <span class="card__players"></span>
         `;
-        // textContent : un nom de jeu ne doit pas pouvoir injecter de HTML
-        card.querySelector('.holo-name').textContent = g.name;
+
+        // textContent : un nom de jeu ne doit jamais pouvoir injecter du HTML
+        card.querySelector('.card__icon').textContent = entry.icon;
+        card.querySelector('.card__name').textContent = entry.name;
+        card.querySelector('.card__desc').textContent = entry.description;
+        card.querySelector('.card__players').textContent = entry.players > 1 ? `1–${entry.players} J` : '1 J';
 
         card.addEventListener('click', () => {
             if (this._launching) return;
             this._launching = true;
 
             this.game.audio.playSFX('select');
-            card.classList.add('holo-card--launching');
-            this.after(100, () => this.game.loadGame(g.id));
+            card.classList.add('is-launching');
+            this.after(140, () => this.game.loadGame(entry.id));
         });
 
         return card;
@@ -107,4 +113,11 @@ export class MenuHolo extends Game {
     }
 }
 
-Registry.register('menu_holo', 'MENU PRINCIPAL', MenuHolo, '#00ffff', { isMenu: true });
+registerGame({
+    id: 'menu_holo',
+    name: 'MENU PRINCIPAL',
+    icon: '🏠',
+    color: '#7dd3fc',
+    isMenu: true,
+    class: MenuHolo
+});

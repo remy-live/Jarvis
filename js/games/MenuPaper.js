@@ -1,5 +1,5 @@
 import { Game } from '../core/Game.js';
-import { Registry } from '../core/GameRegistry.js';
+import { Registry, registerGame } from '../core/GameRegistry.js';
 
 
 export class MenuPaper extends Game{
@@ -255,4 +255,12 @@ renderPage() {
 }
 
 // N'oublie pas d'importer et d'enregistrer cette classe dans ton fichier principal (main.js ou là où tu gères le registre)
-Registry.register('menu_paper',"Menu de papier",MenuPaper,"#222");
+registerGame({
+    id: 'menu_paper',
+    name: 'MENU PAPIER',
+    icon: '📄',
+    color: '#e5e7eb',
+    isMenu: true,
+    hidden: true,
+    class: MenuPaper
+});

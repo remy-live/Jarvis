@@ -1,5 +1,5 @@
 import { Game } from '../core/Game.js';
-import { Registry } from '../core/GameRegistry.js';
+import { registerGame } from '../core/GameRegistry.js';
 import { GameOverModal } from '../core/GameOverModal.js';
 
 export class FlappySquat extends Game {
@@ -8,7 +8,7 @@ export class FlappySquat extends Game {
         this.game = game;
         this.id = 'flappy_squat';
         this.name = 'FLAPPY SQUAT DUO';
-        this.color = '#ffd700'; 
+        this.color = '#fbbf24'; 
         this.isMenu = false;
 
         this.modal = new GameOverModal(this.game);
@@ -59,9 +59,9 @@ export class FlappySquat extends Game {
         this.gameState = 'WAITING';
         this.playersState = [
             // J1 : Jaune (Poussin)
-            this.createPlayerState(0, '#f1c40f', '#e67e22'), 
+            this.createPlayerState(0, '#fbbf24', '#e67e22'), 
             // J2 : Rouge (Perroquet)
-            this.createPlayerState(1, '#e74c3c', '#2c3e50') 
+            this.createPlayerState(1, '#fb7185', '#2c3e50') 
         ];
         this.pipeSpawnTimer = -2.0; 
         this.pipeFrequency = 2.2; 
@@ -406,7 +406,7 @@ export class FlappySquat extends Game {
         ctx.textAlign = 'center';
         if (this.gameState === 'WAITING') {
              ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(w/2 - 300, h/2 - 60, 600, 120);
-             ctx.fillStyle = '#f1c40f'; ctx.font = '900 40px Arial';
+             ctx.fillStyle = '#fbbf24'; ctx.font = '900 40px Arial';
              ctx.fillText("SQUATTEZ POUR DÉMARRER !", w/2, h/2 + 15);
         }
     }
@@ -436,4 +436,12 @@ export class FlappySquat extends Game {
     }
 }
 
-Registry.register('flappy_squat', "FLAPPY SQUAT DUO", FlappySquat, "#ffd700");
+registerGame({
+    id: 'flappy_squat',
+    name: 'FLAPPY SQUAT',
+    icon: '🦅',
+    color: '#facc15',
+    players: 2,
+    description: 'Accroupissez-vous pour faire descendre l\'oiseau.',
+    class: FlappySquat
+});

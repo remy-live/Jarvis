@@ -1,1021 +1,856 @@
+/* =========================================================
+   JARVIS ARCADE — feuille de style
+   Direction artistique : sombre, sobre, contrastes doux.
+   Une seule couleur d'accent, des surfaces translucides,
+   pas de néon criard : le jeu et le joueur passent devant.
+   ========================================================= */
+
 :root {
-    --color-neon: #00ffff;
-    --color-bg: #000000;
-    
-    /* --- SYSTÈME DE COUCHES (Z-INDEX) --- */
-    /* 1. Fond : Vidéo quand elle est en plein écran */
+    /* --- Surfaces --- */
+    --surface-0: #080b0f;   /* fond général */
+    --surface-1: #0f141b;   /* panneaux */
+    --surface-2: #161d26;   /* éléments posés sur un panneau */
+
+    /* --- Texte --- */
+    --text-strong: #f2f6fa;
+    --text: #c3ccd8;
+    --text-muted: #7c8899;
+
+    /* --- Traits & accents --- */
+    --line: rgba(255, 255, 255, 0.09);
+    --line-strong: rgba(255, 255, 255, 0.18);
+    --accent: #7dd3fc;
+    --accent-soft: rgba(125, 211, 252, 0.14);
+    --danger: #fb7185;
+
+    /* --- Joueurs --- */
+    --player-1: #7dd3fc;
+    --player-2: #fbbf24;
+
+    /* --- Formes --- */
+    --radius-s: 10px;
+    --radius-m: 16px;
+    --radius-l: 22px;
+    --shadow: 0 18px 45px rgba(0, 0, 0, 0.5);
+    --blur: saturate(140%) blur(18px);
+
+    /* --- Typographie --- */
+    --font-ui: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --font-display: 'Orbitron', var(--font-ui);
+
+    /* --- Couches (z-index) --- */
     --z-video-fullscreen: 0;
-    
-    /* 2. Jeu : La 3D et l'Interface */
     --z-game-layer: 10;
-    
-    /* 3. Debug : La petite vignette (doit être devant le jeu) */
     --z-video-vignette: 100;
-    
-    /* 4. Boot : L'écran de chargement (Cache tout le reste) */
+    --z-header: 1000;
+    --z-cursor: 9000;
+    --z-modal: 9500;
     --z-boot: 9999;
 }
 
-/* --- RESET GLOBAL --- */
-* { 
-    box-sizing: border-box; 
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--surface-0);
+    color: var(--text);
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
 }
 
-body, html {
-    margin: 0; padding: 0;
-    width: 100vw; height: 100vh;
-    background-color: var(--color-bg);
-    overflow: hidden; /* Pas de scrollbar */
-    font-family: 'Orbitron', sans-serif; /* Ambiance Arcade */
-    user-select: none; /* On ne peut pas sélectionner le texte */
-}
+button { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
 
-/* ---------------------------------------------------------
-   1. LA SOURCE VIDÉO BRUTE
-   Cachée mais active pour MediaPipe
---------------------------------------------------------- */
+
+/* =========================================================
+   1. COUCHES D'AFFICHAGE
+   ========================================================= */
+
+/* Flux webcam brut : invisible, il ne sert qu'à alimenter l'IA */
 #webcam-video {
     position: absolute;
     top: 0; left: 0;
-    opacity: 0;           
-    pointer-events: none; 
+    width: 1px; height: 1px;
+    opacity: 0;
+    pointer-events: none;
     z-index: -1;
 }
-
-/* ---------------------------------------------------------
-   2. LE RETOUR VIDÉO (Feedback Canvas)
-   C'est lui qui change de place (Vignette <-> Plein écran)
---------------------------------------------------------- */
-#feedback-canvas {
-    position: fixed;
-    background-color: #000;
-}
-
-/* ÉTAT A : MODE VIGNETTE (Debug) */
-.view-vignette {
-    /* Taille fixe */
-    width: 320px;
-    height: 240px;
-    
-    /* Position : En bas à droite */
-    right: 20px;
-    bottom: 20px;
-    top: auto; left: auto; /* Reset */
-    
-    /* Apparence */
-    border: 2px solid var(--color-neon);
-    border-radius: 12px;
-    box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
-    
-    /* HIERARCHIE : Devant le jeu */
-    z-index: var(--z-video-vignette);
-    transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); /* Animation fluide 'pop' */
-}
-
-/* ÉTAT B : MODE PLEIN ÉCRAN (Réalité Augmentée) */
-.view-fullscreen {
-    /* Taille : Tout l'écran */
-    width: 100% !important;
-    height: 100% !important;
-    top: 0; left: 0;
-    right: auto; bottom: auto; /* Reset */
-    
-    /* Apparence : Aucune bordure */
-    border: none;
-    border-radius: 0;
-    box-shadow: none;
-    
-    /* Remplissage propre (Cover) */
-    object-fit: cover;
-    
-    /* HIERARCHIE : Derrière le jeu */
-    z-index: var(--z-video-fullscreen);
-    
-    /* INTERACTION : On clique à travers pour toucher le jeu */
-    pointer-events: none;
-}
-
-/* ---------------------------------------------------------
-   3. LE JEU (3D + UI)
---------------------------------------------------------- */
 
 #background-picture,
 #three-canvas,
 #layer-2d,
 #ui-canvas {
     position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    pointer-events: none; /* Important pour cliquer au travers */
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
 }
-
-/* --- ORDRE D'AFFICHAGE (Z-INDEX) --- */
 
 #background-picture {
     z-index: 0;
-    background: radial-gradient(circle, #222 0%, #000 100%);
+    background: var(--surface-0);
 }
 
-#three-canvas {
-    z-index: 1; /* La 3D est au fond */
-    background: transparent; /* Crucial ! */
+#three-canvas { z-index: 1; background: transparent; }
+#layer-2d     { z-index: 2; }
+#ui-canvas    { z-index: 10; }
+
+/* Le menu doit rester cliquable au-dessus de la vidéo */
+#layer-2d > * { pointer-events: auto; }
+
+
+/* --- Retour caméra ------------------------------------- */
+
+#feedback-canvas {
+    position: fixed;
+    background: #05070a;
 }
 
-#layer-2d {
-    z-index: 2; /* La 2D (Écureuil) est par dessus la 3D */
+/* Vignette de contrôle */
+.view-vignette {
+    width: 260px;
+    height: 195px;
+    right: 24px;
+    bottom: 24px;
+    top: auto; left: auto;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-m);
+    box-shadow: var(--shadow);
+    opacity: 0.9;
+    z-index: var(--z-video-vignette);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.view-vignette:hover { opacity: 1; }
+
+/* Fond plein écran : la webcam devient le décor */
+.view-fullscreen {
+    width: 100% !important;
+    height: 100% !important;
+    top: 0; left: 0;
+    right: auto; bottom: auto;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    object-fit: cover;
+    opacity: 0.55;              /* atténuée : le HUD reste lisible */
+    filter: saturate(0.75) contrast(1.05);
+    z-index: var(--z-video-fullscreen);
+    pointer-events: none;
 }
 
-#ui-canvas {
-    z-index: 10; /* L'interface par dessus tout */
-}
 
+/* =========================================================
+   2. ÉCRAN DE DÉMARRAGE
+   ========================================================= */
 
-
-/* ---------------------------------------------------------
-   4. ÉCRAN DE DÉMARRAGE (BOOT)
---------------------------------------------------------- */
 #boot-screen {
     position: fixed;
     inset: 0;
-    background: var(--color-bg);
     z-index: var(--z-boot);
     display: flex;
-    justify-content: center;
     align-items: center;
-    
-    /* Transition pour le fondu de sortie */
+    justify-content: center;
+    background:
+        radial-gradient(90rem 50rem at 50% -10%, #10161f 0%, var(--surface-0) 65%);
     opacity: 1;
-    transition: opacity 0.8s ease-out;
+    transition: opacity 0.7s ease-out;
 }
 
 .boot-content {
+    width: min(560px, 88vw);
     text-align: center;
-    color: var(--color-neon);
-    width: 80%;
-    max-width: 400px;
 }
 
 h1.glitch {
-    font-size: 3rem;
-    margin-bottom: 2rem;
-    text-transform: uppercase;
-    text-shadow: 0 0 15px var(--color-neon);
-    letter-spacing: 5px;
-}
-
-#status-text {
-    margin-bottom: 15px;
-    font-size: 0.9rem;
-    color: #aaa;
-    min-height: 1.2em; /* Évite le saut quand le texte change */
+    margin: 0 0 2.2rem;
+    font-family: var(--font-display);
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    font-weight: 700;
+    letter-spacing: 0.36em;
+    color: var(--text-strong);
 }
 
 .loader-track {
-    width: 100%;
-    height: 4px;
-    background: #333;
+    height: 2px;
+    background: var(--line);
     border-radius: 2px;
     overflow: hidden;
 }
 
-/* Attention : l'ID doit correspondre à main.js (loading-bar) */
 #loading-bar {
-    width: 0%;
+    width: 0;
     height: 100%;
-    background: var(--color-neon);
-    box-shadow: 0 0 10px var(--color-neon);
-    transition: width 0.3s ease-out;
+    background: var(--accent);
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#status-text {
+    margin: 1.1rem 0 0;
+    min-height: 1.2em;
+    font-size: 0.78rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+#boot-error {
+    margin-top: 1.8rem;
+    font-size: 0.86rem;
+    line-height: 2;
+    color: var(--text);
+}
+
+#boot-error-text strong {
+    display: block;
+    margin-bottom: 0.9rem;
+    font-weight: 600;
+    color: var(--text-strong);
+}
+
+.boot-keys {
+    display: inline-block;
+    padding: 2px 9px;
+    margin: 0 2px;
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    background: var(--surface-2);
+    color: var(--text-strong);
+    font-size: 0.76rem;
+}
+
+#boot-continue {
+    margin-top: 1.8rem;
+    padding: 0.85rem 1.9rem;
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--accent);
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.25s, color 0.25s;
+}
+#boot-continue:hover,
+#boot-continue:focus-visible {
+    background: var(--accent);
+    color: var(--surface-0);
+    outline: none;
 }
 
 
+/* =========================================================
+   3. BANDEAU SUPÉRIEUR
+   ========================================================= */
 
-/* ---------------------------------------------------------
-   5. BANDEAU SUPÉRIEUR (HEADER)
-   Barre transparente : seuls les boutons captent les clics.
---------------------------------------------------------- */
 #ui-header {
     position: absolute;
     top: 0; left: 0;
     width: 100%;
-    height: 100px;
     display: flex;
+    align-items: center;
     justify-content: space-between;
-    align-items: flex-start;
-    padding: 20px 30px;
-    z-index: 1000;
-
-    color: white;
-    font-family: 'Orbitron', sans-serif;
-    font-weight: bold;
-    text-shadow: 1px 1px 2px black;
-
-    background: transparent;
-    pointer-events: none; /* les clics traversent le vide... */
+    padding: 20px 26px;
+    z-index: var(--z-header);
+    background: linear-gradient(to bottom, rgba(8, 11, 15, 0.75), transparent);
+    pointer-events: none;   /* seuls les boutons captent les clics */
 }
 
 .header-group {
-    pointer-events: auto; /* ...mais pas les boutons */
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
+    pointer-events: auto;
 }
 
-/* Élément masqué : doit gagner contre les display:flex ci-dessous */
-[hidden] { display: none !important; }
-
-/* Bouton rétro (retour menu) */
-.btn-retro {
-    font-family: 'Orbitron', sans-serif;
-    font-weight: bold;
-    border: 2px solid white;
-    border-radius: 8px;
-    padding: 10px 20px;
-    cursor: pointer;
-    color: white;
-    text-transform: uppercase;
-    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.5);
-    transition: transform 0.1s;
-}
-.btn-retro:active { transform: translateY(4px); box-shadow: none; }
-.btn-retro.red { background: #e74c3c; }
-.btn-retro.red:hover { background: #ff6b6b; }
-
-/* Bouton rond (son) */
-.btn-round {
-    width: 50px; height: 50px;
-    border-radius: 50%;
-    border: 2px solid white;
-    background: rgba(0, 0, 0, 0.5);
-    color: white;
-    font-size: 24px;
-    cursor: pointer;
-    display: flex;
+.btn-retro,
+.btn-round,
+.btn-ghost {
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: transform 0.2s, background 0.2s;
+    border: 1px solid var(--line-strong);
+    background: rgba(15, 20, 27, 0.72);
+    backdrop-filter: var(--blur);
+    color: var(--text-strong);
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, transform 0.15s;
 }
-.btn-round:hover { transform: scale(1.1); background: rgba(0, 0, 0, 0.8); }
 
-/* Sélecteur 1 joueur / 2 joueurs */
+.btn-retro {
+    height: 40px;
+    padding: 0 18px;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+.btn-retro:hover { border-color: var(--line-strong); background: var(--surface-2); }
+.btn-retro:active { transform: scale(0.97); }
+.btn-retro.red:hover { border-color: var(--danger); color: var(--danger); }
+
+.btn-round {
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    font-size: 1rem;
+}
+.btn-round:hover { background: var(--surface-2); }
+.btn-round:active { transform: scale(0.94); }
+
+.btn-ghost {
+    height: 40px;
+    padding: 0 20px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+.btn-ghost:hover { background: var(--surface-2); border-color: var(--accent); color: var(--accent); }
+
 .player-switch {
     display: flex;
-    background: rgba(0, 0, 0, 0.6);
-    border: 2px solid white;
-    border-radius: 25px;
-    overflow: hidden;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: rgba(15, 20, 27, 0.72);
+    backdrop-filter: var(--blur);
 }
+
 .switch-opt {
-    padding: 10px 20px;
-    color: #bbb;
+    padding: 7px 16px;
+    border-radius: 999px;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
     cursor: pointer;
-    font-family: 'Orbitron', sans-serif;
-    font-size: 14px;
     transition: background 0.2s, color 0.2s;
 }
+.switch-opt:hover { color: var(--text); }
 .switch-opt.active {
-    background: var(--color-neon);
-    color: #000;
-    box-shadow: 0 0 15px var(--color-neon);
+    background: var(--accent-soft);
+    color: var(--accent);
 }
 
-/* Badge d'information (ex : "MODE SOURIS") */
 .header-notice {
     padding: 8px 14px;
-    border: 1px solid rgba(255, 255, 255, 0.4);
-    border-radius: 20px;
-    background: rgba(0, 0, 0, 0.5);
-    font-size: 12px;
-    letter-spacing: 2px;
-    color: #ffcc00;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: rgba(15, 20, 27, 0.72);
+    color: var(--player-2);
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
 }
 
 
-/* ---------------------------------------------------------
-   6. COUCHE DE JEU 2D (DOM)
---------------------------------------------------------- */
-#nuts-game-layer {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    pointer-events: none;
-    overflow: hidden;
-    z-index: 10;
-}
-
-
-:root {
-    --paper-bg: #f4f1ea; /* Blanc cassé */
-    --paper-line: #a2a2a2; /* Couleur des lignes */
-    --ink-color: #2c2c2c; /* Couleur style encre */
-    --highlight-color: #ff4757; /* Pour le survol */
-    --font-paper: 'Patrick Hand', cursive, sans-serif;
-}
-
-
-/* --- CURSEUR VIRTUEL (DWELL CLICK) --- */
+/* =========================================================
+   4. CURSEUR VIRTUEL (validation par survol)
+   ========================================================= */
 
 .virtual-cursor {
     position: absolute;
+    top: 0; left: 0;
     width: 0; height: 0;
+    display: none;
     pointer-events: none;
-    z-index: 9999;
-    display: none; /* Caché par défaut */
-    transition: transform 0.05s linear; /* Mouvement fluide */
-    
-    /* Couleur par défaut (sera écrasée par le JS) */
-    --cursor-color: #00ffff; 
+    z-index: var(--z-cursor);
+    transition: transform 0.05s linear;
+    --cursor-color: var(--player-1);
 }
 
 .cursor-scaler {
     position: absolute;
     top: 0; left: 0;
     width: 60px; height: 60px;
-    transform: translate(-50%, -50%);
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Effet rebond */
+    transform: translate(-50%, -50%);
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Le point central */
 .cursor-dot {
     position: absolute;
-    width: 8px; height: 8px;
-    background: white;
+    width: 7px; height: 7px;
     border-radius: 50%;
-    box-shadow: 0 0 10px white, 0 0 20px var(--cursor-color);
+    background: var(--cursor-color);
+    box-shadow: 0 0 0 3px rgba(8, 11, 15, 0.55);
 }
 
-/* Le cercle SVG */
-.progress-ring {
-    transform: rotate(-90deg); /* Commence en haut */
-    overflow: visible;
-}
+.progress-ring { transform: rotate(-90deg); overflow: visible; }
 
 .ring-bg {
-    stroke: rgba(255, 255, 255, 0.2);
-    stroke-width: 3;
     fill: none;
+    stroke: rgba(255, 255, 255, 0.16);
+    stroke-width: 2;
 }
 
 .ring-progress {
-    stroke: var(--cursor-color); /* Utilise la variable ! */
-    stroke-width: 4;
     fill: none;
-    stroke-dasharray: 138; /* Circonférence pour r=22 */
-    stroke-dashoffset: 138; /* Vide au début */
+    stroke: var(--cursor-color);
+    stroke-width: 3;
+    stroke-dasharray: 138;
+    stroke-dashoffset: 138;
     stroke-linecap: round;
     transition: stroke-dashoffset 0.05s linear;
-    filter: drop-shadow(0 0 4px var(--cursor-color)); /* Glow néon */
 }
 
-/* --- ÉTATS --- */
-
-/* Quand on vise (zoom) */
-.cursor-locked .cursor-scaler {
-    transform: translate(-50%, -50%) scale(1.3);
-}
-
-/* Quand on valide (flash blanc) */
+.cursor-locked .cursor-scaler { transform: translate(-50%, -50%) scale(1.22); }
 .cursor-clicked .ring-progress {
-    stroke: #ffffff !important;
-    filter: drop-shadow(0 0 15px white) !important;
+    stroke: var(--text-strong);
     transition: none;
 }
 
-/* --- Conteneur Principal --- */
-.paper-menu-container {
-    position: absolute;
-    top: 0; left: 0; width: 100%; height: 100%;
-    
-    /* Fond texture papier + lignes */
-    background-color: var(--paper-bg);
-    background-image: 
-        linear-gradient(var(--paper-line) 1px, transparent 1px),
-        linear-gradient(90deg, var(--paper-line) 1px, transparent 1px);
-    background-size: 100% 30px, 30px 100%; /* Lignes horizontales style cahier */
-    /* Optionnel : ajouter une vraie texture d'image par dessus */
-    /* background-image: url('path/to/paper-texture.jpg'), linear-gradient(...) */
-    /* background-blend-mode: multiply; */
 
+/* =========================================================
+   5. MENU PRINCIPAL
+   ========================================================= */
+
+.menu {
+    position: absolute;
+    inset: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 2rem;
-    box-sizing: border-box;
-    font-family: var(--font-paper);
-    color: var(--ink-color);
-    
-    /* Important : permet les interactions pointer events sur ce calque */
-    pointer-events: auto !important; 
+    gap: 34px;
+    padding: 110px 6vw 48px;
+    background: linear-gradient(to bottom, rgba(8, 11, 15, 0.55), rgba(8, 11, 15, 0.88));
 }
 
-/* --- Titre --- */
-.paper-title {
-    font-size: 4rem;
-    margin-bottom: 2rem;
+.menu__head { text-align: center; }
+
+.menu__eyebrow {
+    margin: 0 0 10px;
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.4em;
     text-transform: uppercase;
-    /* Effet "gribouillé" */
-    text-shadow: 2px 2px 0px rgba(0,0,0,0.2);
-    transform: rotate(-2deg);
-    border-bottom: 3px dashed var(--ink-color);
+    color: var(--text-muted);
 }
 
-/* --- Grille --- */
-.paper-grid-wrapper {
-    width: 100%;
-    max-width: 1000px;
-    flex-grow: 1; /* Prend l'espace disponible */
-    display: flex;
-    align-items: center;
-}
-
-.paper-grid {
-    display: grid;
-    /* 3 colonnes, 3 lignes auto-dimensionnées */
-    grid-template-columns: repeat(3, 1fr);
-    grid-template-rows: repeat(3, 1fr);
-    gap: 1.5rem;
-    width: 100%;
-    height: 100%;
-    max-height: 60vh; /* Limite la hauteur pour garder l'aspect 3x3 */
-}
-
-/* --- Cartes de jeu --- */
-.paper-card {
-    position: relative;
-    background: #fff;
-    padding: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-    cursor: pointer;
-    overflow: hidden; /* Pour la barre de progression */
-
-    /* Style bordure "dessinée à la main" */
-    border: 3px solid var(--ink-color);
-    border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
-    box-shadow: 5px 5px 0 rgba(0,0,0,0.1);
-    transition: all 0.2s ease-out;
-}
-
-/* États de survol (Souris ET Doigt) */
-.paper-card:hover, .paper-card.finger-hover {
-    transform: scale(1.05) rotate(1deg);
-    box-shadow: 8px 8px 0 rgba(0,0,0,0.15);
-    background: #fffce0; /* Légèrement jaune style post-it */
-    border-color: var(--highlight-color);
-    color: var(--highlight-color);
-}
-
-.paper-card h2 {
-    font-size: 1.8rem;
+.menu__title {
     margin: 0;
+    font-family: var(--font-display);
+    font-size: clamp(1.7rem, 3.6vw, 2.6rem);
+    font-weight: 400;
+    letter-spacing: 0.2em;
+    color: var(--text-strong);
+}
+.menu__title span { color: var(--accent); }
+
+.menu__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+    width: min(1080px, 100%);
+    max-height: 58vh;
+    overflow-y: auto;
+    padding: 2px;
 }
 
-.game-marker {
-    position: absolute;
-    top: 10px; left: 15px;
-    font-size: 1.2rem;
-    opacity: 0.6;
-    text-decoration: underline dashed;
+.menu__hint {
+    margin: 0;
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    text-align: center;
 }
 
-/* --- Barre de progression (Dwell Click) --- */
-.dwell-progress-bar {
-    position: absolute;
-    bottom: 0; left: 0;
-    height: 6px;
-    width: 0%; /* Commence à 0 */
-    background-color: var(--highlight-color);
-    transition: width 0.1s linear; /* Transition fluide gérée par le JS */
+.menu__empty {
+    grid-column: 1 / -1;
+    padding: 40px;
+    text-align: center;
+    color: var(--danger);
 }
 
-/* --- Pagination --- */
-.paper-pagination {
-    margin-top: 2rem;
+/* --- Carte de jeu --- */
+.card {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 16px;
+    width: 100%;
+    padding: 18px 20px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    background: rgba(15, 20, 27, 0.7);
+    backdrop-filter: var(--blur);
+    text-align: left;
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.25s, background 0.25s, transform 0.2s;
+}
+
+/* Liseré coloré propre à chaque jeu */
+.card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--card-accent, var(--accent));
+    opacity: 0.55;
+    transition: opacity 0.25s;
+}
+
+.card:hover,
+.card:focus-visible,
+.card.cursor-target {
+    border-color: var(--card-accent, var(--accent));
+    background: var(--surface-2);
+    transform: translateY(-2px);
+    outline: none;
+}
+.card:hover::before { opacity: 1; }
+
+.card.is-launching {
+    transform: scale(0.98);
+    border-color: var(--text-strong);
+}
+
+.card__icon {
+    flex: 0 0 auto;
+    width: 48px; height: 48px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--radius-s);
+    background: var(--surface-2);
     font-size: 1.5rem;
 }
 
-.paper-btn {
-    background: none;
-    border: 2px dashed var(--ink-color);
-    font-family: var(--font-paper);
-    font-size: 1.2rem;
-    padding: 0.5rem 1rem;
-    cursor: pointer;
-    transition: all 0.2s;
-    border-radius: 5px;
+.card__body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
 }
 
-.paper-btn:hover:not([disabled]), .paper-btn.finger-hover:not([disabled]) {
-    background: var(--ink-color);
-    color: var(--paper-bg);
-    transform: rotate(-2deg);
+.card__name {
+    font-family: var(--font-display);
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: var(--text-strong);
 }
 
-.paper-btn[disabled] {
-    opacity: 0.3;
-    cursor: not-allowed;
-    border-style: dotted;
+.card__desc {
+    font-size: 0.76rem;
+    line-height: 1.4;
+    color: var(--text-muted);
 }
 
-/* --- Curseur du Doigt (Debug visuel) --- */
-.finger-cursor {
-    pointer-events: none !important; /* Le curseur devient "fantôme" pour les clics */
+.card__players {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding: 4px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 0.64rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+}
+
+
+/* =========================================================
+   6. MODALE DE FIN DE PARTIE
+   ========================================================= */
+
+.modal-overlay {
     position: fixed;
-    z-index: 9999;
-    /* Styles visuels (exemples) */
-    width: 25px;
-    height: 25px;
-    border: 3px solid #0ef;
-    border-radius: 50%;
-    box-shadow: 0 0 15px #0ef;
+    inset: 0;
+    z-index: var(--z-modal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(8, 11, 15, 0.72);
+    backdrop-filter: blur(10px);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+.modal-overlay.visible { opacity: 1; }
+
+.modal-box {
+    width: min(420px, 88vw);
+    padding: 36px 32px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-l);
+    background: var(--surface-1);
+    box-shadow: var(--shadow);
+    text-align: center;
+    transform: translateY(12px);
+    transition: transform 0.3s cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+.modal-overlay.visible .modal-box { transform: translateY(0); }
+
+.modal-title {
+    margin: 0 0 6px;
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    color: var(--text-strong);
+}
+
+.modal-score {
+    margin-bottom: 28px;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.btn-modal {
+    height: 42px;
+    padding: 0 22px;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 0.76rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+.btn-modal:hover { color: var(--text-strong); }
+#btn-retry:hover { border-color: var(--accent); color: var(--accent); }
+#btn-menu:hover { border-color: var(--danger); color: var(--danger); }
+
+
+/* =========================================================
+   7. PHOTOMATON
+   ========================================================= */
+
+.photo-flash {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-modal) + 1);
+    background: #ffffff;
+    opacity: 0;
+    pointer-events: none;
+}
+.photo-flash.is-firing { animation: photo-flash 420ms ease-out; }
+
+@keyframes photo-flash {
+    0%   { opacity: 0.85; }
+    100% { opacity: 0; }
+}
+
+.photo-preview {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-modal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4vh 4vw;
+    background: rgba(8, 11, 15, 0.85);
+    backdrop-filter: blur(12px);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+.photo-preview.is-visible { opacity: 1; }
+
+.photo-preview__box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    max-width: 100%;
+}
+
+.photo-preview__img {
+    max-width: min(880px, 92vw);
+    max-height: 70vh;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-m);
+    box-shadow: var(--shadow);
+}
+
+.photo-preview__actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
 }
 
 
-/* --- LE MASQUE ÉCUREUIL (EFFET 3D & TRANSPARENCE) --- */
+/* =========================================================
+   8. ÉLÉMENTS DE JEU (couche DOM)
+   ========================================================= */
+
+.game-item {
+    position: absolute;
+    top: -100px;
+    display: grid;
+    place-items: center;
+    line-height: 1;
+    will-change: transform;
+    animation: fall linear forwards;
+    filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.45));
+}
+
+@keyframes fall {
+    from { transform: translateY(0) rotate(0deg); }
+    to   { transform: translateY(115vh) rotate(240deg); }
+}
+
+.game-item.highlight { filter: drop-shadow(0 0 12px var(--accent)); }
+.game-item.popped { animation: pop 0.25s ease-out forwards; }
+
+@keyframes pop {
+    to { transform: scale(1.8); opacity: 0; }
+}
+
+.particle {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    will-change: transform, opacity;
+}
+
+
+/* =========================================================
+   9. MASQUE ÉCUREUIL (jeu NOISETTES)
+   ========================================================= */
+
 #squirrel-mask {
     position: absolute;
     top: 0; left: 0;
-    width: 120px; 
+    width: 120px;
     height: 180px;
     transform-origin: center center;
     pointer-events: none;
     will-change: transform;
-    opacity: 0.8;
+    opacity: 0.92;
 }
 
 .mask-head {
-    width: 100%; height: 100%;
-    
-    /* 1. LE DÉGRADÉ (Relief) */
-    /* Notez bien 'background' et non 'background-color' */
-    /* On force le contraste : Centre orange vif -> Bords marron foncé */
-    background: radial-gradient(
-        circle at 30% 30%, 
-        rgba(230, 126, 34, 0.95) 10%,   /* Point de lumière (Haut Gauche) */
-        rgba(211, 84, 0, 0.9) 50%,      /* Couleur principale */
-        rgba(120, 50, 10, 0.95) 100%    /* Bords très sombres pour l'effet 3D */
-    );
-
-    /* Flou d'arrière plan (Effet verre) */
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-
-    border-radius: 50% 50% 45% 45%; 
-    
-    /* Bordure semi-transparente pour ne pas faire "sticker" */
-    border: 3px solid rgba(80, 40, 10, 0.8);
-
-    /* Ombres pour le volume global */
-    box-shadow: 
-        inset 0 4px 15px rgba(255, 255, 255, 0.25), /* Reflet haut */
-        inset 0 -10px 20px rgba(0, 0, 0, 0.3),      /* Ombre bas */
-        0 10px 20px rgba(0,0,0,0.4);                /* Ombre portée */
-        
+    width: 100%;
+    height: 100%;
+    border-radius: 50% 50% 45% 45%;
+    background: radial-gradient(circle at 30% 30%, #d98b3f 10%, #8a5423 90%);
+    border: 2px solid rgba(0, 0, 0, 0.35);
     position: relative;
-    /* Assurez-vous qu'il n'y a PAS de ligne 'background-color' ici ou après ! */
 }
 
-/* --- LES OREILLES (Transition Douce) --- */
-.mask-head::before, .mask-head::after {
+/* Oreilles */
+.mask-head::before,
+.mask-head::after {
     content: '';
     position: absolute;
-    
-    /* On descend les oreilles un peu plus bas pour cacher la jonction */
-    top: -18px; 
-    
-    width: 35px; height: 55px; /* Un peu plus hautes */
-    
-    /* 2. LE DÉGRADÉ DES OREILLES */
-    /* Le bas de l'oreille doit être FONCÉ pour se fondre dans le bord foncé de la tête */
-    background: linear-gradient(
-        to bottom, 
-        rgba(230, 126, 34, 0.9) 0%,   /* Haut clair */
-        rgba(211, 84, 0, 0.9) 60%,    /* Milieu */
-        rgba(120, 50, 10, 0.95) 100%  /* BAS SOMBRE (Match le bord de la tête) */
-    );
-    
-    /* 3. L'ASTUCE DE LA BORDURE INVISIBLE */
-    border-top: 3px solid rgba(80, 40, 10, 0.8);
-    border-left: 3px solid rgba(80, 40, 10, 0.8);
-    border-right: 3px solid rgba(80, 40, 10, 0.8);
-    
-    /* PAS de bordure en bas, c'est ça qui cassait l'immersion ! */
-    border-bottom: none; 
-
-    border-radius: 50% 50% 0 0;
-    z-index: -1; /* Derrière la tête */
-    
-    /* Ombre interne pour creuser l'oreille + Ombre de fusion en bas */
-    box-shadow: inset 0 0 10px rgba(0,0,0,0.3);
+    top: -22px;
+    width: 42px;
+    height: 52px;
+    border-radius: 50% 50% 20% 20%;
+    background: #8a5423;
+    border: 2px solid rgba(0, 0, 0, 0.3);
+    z-index: -1;
 }
-
-/* Positionnement Oreilles (Inchangé) */
 .mask-head::before { left: 4px; transform: rotate(-10deg); }
 .mask-head::after { right: 4px; transform: rotate(10deg); }
 
-/* Yeux (Effet Bille / Verre) */
 .mask-eyes {
+    position: absolute;
+    top: 34%;
+    width: 100%;
     display: flex;
-    justify-content: space-between;
-    padding: 60px 10px 0; 
+    justify-content: space-around;
+    padding: 0 14px;
 }
 
 .eye {
-    width: 32px; height: 32px;
-    
-    /* Fond blanc cassé légèrement transparent */
-    background: radial-gradient(circle at 40% 40%, rgba(255,255,255,0.95), rgba(220,220,220,0.8));
-    
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
-    border: 2px solid rgba(51, 51, 51, 0.9);
+    background: #10141a;
+    border: 2px solid rgba(255, 255, 255, 0.75);
     position: relative;
-    overflow: hidden;
-
-    /* Relief de l'œil (sphère) */
-    box-shadow: 
-        inset 2px 2px 5px rgba(255,255,255,1), /* Reflet lumière */
-        inset -2px -2px 5px rgba(0,0,0,0.2),   /* Ombre volume */
-        0 2px 5px rgba(0,0,0,0.2);            /* Ombre portée */
+    transition: height 0.08s linear;
 }
-
-/* Pupille */
-.eye::after { 
-    content: ''; 
-    position: absolute; 
-    top: 8px; right: 6px; 
-    width: 10px; height: 10px; 
-    background: #333; 
-    border-radius: 50%; 
-    /* Petit reflet blanc dans la pupille pour la vie */
-    box-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-}
-
-.eye.closed { 
-    /* Paupière fermée : reprend la texture du visage */
-    background: linear-gradient(to bottom, rgba(211, 84, 0, 0.9), rgba(160, 64, 0, 0.9));
-    box-shadow: inset 0 2px 5px rgba(0,0,0,0.2);
-}
-.eye.closed::after { display: none; }
-.eye.closed::before { 
-    content: ''; position: absolute; top: 55%; left: 10%; width: 80%; height: 3px; 
-    background: rgba(51,51,51,0.8); 
-    border-radius: 2px;
-}
-
-/* Nez (Effet brillant / humide) */
-.mask-nose { 
-    position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); 
-    width: 25px; height: 15px; 
-    
-    /* Petit dégradé pour faire un nez brillant */
-    background: radial-gradient(circle at 30% 30%, #666, #111);
-    
-    border-radius: 40% 40% 60% 60%; 
-    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-}
-
-/* --- LA BOUCHE --- */
-.mask-mouth {
+.eye::after {
+    content: '';
     position: absolute;
-    top: 125px;
+    top: 3px; left: 4px;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.9);
+}
+.eye.closed { height: 4px; border-radius: 4px; background: #10141a; }
+.eye.closed::after { display: none; }
+
+.mask-nose {
+    position: absolute;
+    top: 52%;
     left: 50%;
     transform: translateX(-50%);
-    width: 50px; 
-    height: 10px; 
-    
-    /* Fond sombre légèrement transparent */
-    background-color: rgba(62, 30, 10, 0.95); 
-    
-    border-radius: 0 0 25px 25px;
+    width: 18px;
+    height: 13px;
+    border-radius: 50%;
+    background: #2b1a10;
+}
+
+.mask-mouth {
+    position: absolute;
+    top: 62%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 46px;
+    height: 10px;
+    border-radius: 0 0 24px 24px;
+    background: #3a2114;
     overflow: hidden;
-    border: 2px solid rgba(90, 45, 12, 0.8);
-    z-index: 5;
-    
-    /* Ombre interne pour la profondeur de la gorge */
-    box-shadow: inset 0 -5px 10px rgba(0,0,0,0.5);
-
-    transition: height 0.05s linear, background-color 0.4s ease-out, box-shadow 0.4s ease-out;
+    transition: height 0.06s linear;
 }
-
-.mask-mouth.ready-to-eat {
-    background-color: rgba(138, 43, 226, 0.9); /* Violet avec transparence */
-    box-shadow: inset 0 0 15px #ff00ff, 0 0 15px rgba(138, 43, 226, 0.6);
-    border-color: rgba(255,255,255,0.9);
-}
+.mask-mouth.ready-to-eat { box-shadow: 0 0 14px rgba(125, 211, 252, 0.6); }
 
 .mask-teeth {
-    position: absolute; top: 0; left: 50%;
-    transform: translateX(-50%);
-    display: flex; gap: 2px;
+    display: flex;
+    justify-content: center;
+    gap: 2px;
+    padding-top: 1px;
 }
+
 .tooth {
-    width: 12px; height: 14px;
-    background: linear-gradient(to bottom, #fff, #eee); /* Dent légèrement ombrée en bas */
-    border: 1px solid rgba(0,0,0,0.1);
-    border-radius: 0 0 4px 4px;
-}
-/* --- LES NOISETTES (ITEMS) --- */
-.game-item {
-    position: absolute;
-    top: -80px; /* Départ hors écran */
-    left: 0;
-    font-size: 50px;
-    line-height: 1;
-    user-select: none;
-    z-index: 1000; /* FORCE L'AFFICHAGE DEVANT TOUT */
-    
-    /* Animation définie par les keyframes ci-dessous */
-    animation: fall linear forwards; 
-}
-
-/* L'animation de chute */
-@keyframes fall {
-    0% { top: -80px; }
-    100% { top: 110vh; } /* Va jusqu'en bas de l'écran */
-}
-
-/* Effets visuels */
-.game-item.highlight {
-    filter: drop-shadow(0 0 10px yellow);
-    transform: scale(1.2);
-}
-
-.game-item.popped {
-    animation: pop 0.2s ease-out forwards;
-}
-
-/* Animations Keyframes */
-
-@keyframes pop {
-    0% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.5); opacity: 0.8; }
-    100% { transform: scale(0); opacity: 0; }
-}
-
-/* Particules de score */
-.particle {
-    position: absolute;
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    pointer-events: none;
-    animation: fadeOut 0.8s ease-out forwards;
-}
-
-@keyframes fadeOut {
-    0% { transform: translate(0, 0) scale(1); opacity: 1; }
-    100% { transform: translate(var(--vx), var(--vy)) scale(0); opacity: 0; }
+    width: 9px;
+    height: 12px;
+    border-radius: 0 0 3px 3px;
+    background: #f4f6f8;
 }
 
 
-/* --- MENU HOLO (STYLE CYBERPUNK) --- */
+/* =========================================================
+   10. ACCESSIBILITÉ
+   ========================================================= */
 
-.holo-container {
-    position: absolute;
-    top: 0; left: 0; width: 100%; height: 100%;
-    
-    /* Fond sombre léger transparent + Grille TV Scanline */
-    background: radial-gradient(circle, rgba(0, 20, 40, 0.6) 0%, rgba(0, 0, 0, 0.9) 100%);
-    background-image: repeating-linear-gradient(
-        0deg,
-        transparent,
-        transparent 2px,
-        rgba(0, 255, 255, 0.03) 3px,
-        rgba(0, 255, 255, 0.03) 4px
-    );
-    
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    pointer-events: auto !important; /* Pour capter les clics */
-}
-
-.holo-title {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 3.5rem; font-weight: 900;
-    color: #fff; letter-spacing: 8px;
-    margin-bottom: 60px;
-    text-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
-}
-
-.holo-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 40px;
-    perspective: 1000px;
-}
-
-.holo-card {
-    position: relative;
-    width: 220px; height: 180px;
-    
-    /* Verre Givré */
-    background: rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-    
-    border-radius: 15px;
-    /* Coupe futuriste en bas à droite */
-    clip-path: polygon(0 0, 100% 0, 100% 85%, 85% 100%, 0 100%);
-    
-    display: flex; flex-direction: column;
-    justify-content: center; align-items: center;
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    overflow: hidden;
-}
-
-.holo-card:hover, .holo-card.virtual-hover {
-    transform: translateY(-10px) scale(1.05);
-    background: rgba(0, 255, 255, 0.1);
-    border-color: #00ffff;
-    box-shadow: 0 0 20px rgba(0, 255, 255, 0.4);
-}
-
-.holo-icon { font-size: 3.5rem; margin-bottom: 15px; filter: drop-shadow(0 0 10px rgba(255,255,255,0.3)); transition: 0.3s; }
-.holo-card:hover .holo-icon { transform: scale(1.2) rotate(5deg); }
-
-.holo-name { font-family: 'Orbitron'; color: #ccc; font-size: 0.9rem; letter-spacing: 2px; text-transform: uppercase; }
-.holo-card:hover .holo-name { color: #fff; text-shadow: 0 0 5px #00ffff; }
-
-/* Petite barre de scan qui passe */
-.holo-scanline {
-    position: absolute; top: 0; left: 0; width: 100%; height: 5px;
-    background: rgba(255, 255, 255, 0.5);
-    opacity: 0;
-    transition: 0.5s;
-}
-.holo-card:hover .holo-scanline {
-    opacity: 1;
-    top: 100%;
-    transition: top 1s linear, opacity 0.1s;
-}
-
-/* Couleurs spécifiques par jeu */
-.holo-card[data-id="game_nuts"]:hover { border-color: #e67e22; box-shadow: 0 0 20px #e67e22; background: rgba(230, 126, 34, 0.1); }
-.holo-card[data-id="fruit_blade"]:hover { border-color: #ff4757; box-shadow: 0 0 20px #ff4757; background: rgba(255, 71, 87, 0.1); }
-.holo-card[data-id="flappy_squat"]:hover { border-color: #f1c40f; box-shadow: 0 0 20px #f1c40f; background: rgba(241, 196, 15, 0.1); }
-
-/* --- MODALE GAME OVER --- */
-.modal-overlay {
-    position: absolute;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0, 0, 0, 0.85); /* Fond sombre */
-    z-index: 2000; /* Au-dessus de tout */
-    
-    display: flex; justify-content: center; align-items: center;
-    opacity: 0; transition: opacity 0.3s ease;
-    backdrop-filter: blur(5px);
-}
-
-.modal-overlay.visible { opacity: 1; }
-
-.modal-box {
-    background: rgba(20, 20, 30, 0.95);
-    border: 2px solid #00ffff;
-    border-radius: 20px;
-    padding: 40px 60px;
-    text-align: center;
-    box-shadow: 0 0 50px rgba(0, 255, 255, 0.2);
-    transform: scale(0.8);
-    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.modal-overlay.visible .modal-box { transform: scale(1); }
-
-.modal-title {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 3rem; color: #ff4757; margin: 0 0 20px 0;
-    text-shadow: 0 0 20px rgba(255, 71, 87, 0.5);
-}
-
-.modal-score {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 2rem; color: white; margin-bottom: 40px;
-}
-
-.modal-actions {
-    display: flex; gap: 20px; justify-content: center;
-}
-
-.btn-modal {
-    background: transparent;
-    border: 2px solid white; color: white;
-    padding: 15px 30px; font-size: 1.2rem;
-    font-family: 'Orbitron'; cursor: pointer;
-    border-radius: 10px; transition: all 0.2s;
-}
-
-.btn-modal:hover {
-    background: white; color: black;
-    box-shadow: 0 0 20px white; transform: translateY(-3px);
-}
-
-#btn-retry { border-color: #00ff00; color: #00ff00; }
-#btn-retry:hover { background: #00ff00; color: black; box-shadow: 0 0 20px #00ff00; }
-
-#btn-menu { border-color: #ff0055; color: #ff0055; }
-#btn-menu:hover { background: #ff0055; color: white; box-shadow: 0 0 20px #ff0055; }
-
-/* ---------------------------------------------------------
-   ÉCRAN DE BOOT : ERREUR / MODE DE SECOURS
---------------------------------------------------------- */
-#boot-error {
-    margin-top: 25px;
-    font-family: 'Orbitron', sans-serif;
-    font-size: 0.8rem;
-    line-height: 1.9;
-    color: #ddd;
-}
-
-#boot-error-text strong {
-    display: inline-block;
-    margin-bottom: 12px;
-    color: #ffcc00;
-}
-
-.boot-keys {
-    display: inline-block;
-    padding: 2px 8px;
-    margin: 0 2px;
-    border: 1px solid rgba(0, 255, 255, 0.5);
-    border-radius: 4px;
-    background: rgba(0, 255, 255, 0.08);
-    color: var(--color-neon);
-    font-size: 0.75rem;
-}
-
-#boot-continue {
-    margin-top: 22px;
-    padding: 12px 26px;
-    border: 2px solid var(--color-neon);
-    border-radius: 8px;
-    background: transparent;
-    color: var(--color-neon);
-    font-family: 'Orbitron', sans-serif;
-    font-weight: bold;
-    letter-spacing: 2px;
-    cursor: pointer;
-    transition: background 0.2s, color 0.2s, box-shadow 0.2s;
-}
-
-#boot-continue:hover,
-#boot-continue:focus-visible {
-    background: var(--color-neon);
-    color: #000;
-    box-shadow: 0 0 20px var(--color-neon);
-    outline: none;
-}
-
-
-/* ---------------------------------------------------------
-   MENU HOLO : COMPLÉMENTS
---------------------------------------------------------- */
-.holo-hint {
-    margin-top: 28px;
-    font-family: 'Orbitron', sans-serif;
-    font-size: 0.7rem;
-    letter-spacing: 1px;
-    color: rgba(255, 255, 255, 0.55);
-    text-align: center;
-}
-
-.holo-empty {
-    padding: 40px;
-    color: #ff5577;
-    font-size: 0.9rem;
-    text-align: center;
-}
-
-/* Petit "flash" au lancement d'un jeu */
-.holo-card--launching {
-    transform: scale(0.9);
-    border-color: #fff !important;
-    box-shadow: 0 0 30px #fff !important;
-}
-
-/* Couleur d'accent fournie par le Registry */
-.holo-card[style*="--card-color"]:hover {
-    border-color: var(--card-color);
-    box-shadow: 0 0 20px var(--card-color);
-}
-
-
-/* ---------------------------------------------------------
-   ACCESSIBILITÉ : RESPECT DE "RÉDUIRE LES ANIMATIONS"
---------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
     }
+}
+
+/* Petits écrans : le menu passe en colonne unique */
+@media (max-width: 720px) {
+    .menu { padding: 96px 20px 32px; gap: 24px; }
+    .menu__grid { grid-template-columns: 1fr; max-height: 62vh; }
+    .card__desc { display: none; }
+    .view-vignette { width: 160px; height: 120px; right: 14px; bottom: 14px; }
 }

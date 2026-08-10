@@ -1,0 +1,157 @@
+.paper-menu-container {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    
+    /* Fond texture papier + lignes */
+    background-color: var(--paper-bg);
+    background-image: 
+        linear-gradient(var(--paper-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--paper-line) 1px, transparent 1px);
+    background-size: 100% 30px, 30px 100%; /* Lignes horizontales style cahier */
+    /* Optionnel : ajouter une vraie texture d'image par dessus */
+    /* background-image: url('path/to/paper-texture.jpg'), linear-gradient(...) */
+    /* background-blend-mode: multiply; */
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    box-sizing: border-box;
+    font-family: var(--font-paper);
+    color: var(--ink-color);
+    
+    /* Important : permet les interactions pointer events sur ce calque */
+    pointer-events: auto !important; 
+}
+
+/* --- Titre --- */
+.paper-title {
+    font-size: 4rem;
+    margin-bottom: 2rem;
+    text-transform: uppercase;
+    /* Effet "gribouillé" */
+    text-shadow: 2px 2px 0px rgba(0,0,0,0.2);
+    transform: rotate(-2deg);
+    border-bottom: 3px dashed var(--ink-color);
+}
+
+/* --- Grille --- */
+.paper-grid-wrapper {
+    width: 100%;
+    max-width: 1000px;
+    flex-grow: 1; /* Prend l'espace disponible */
+    display: flex;
+    align-items: center;
+}
+
+.paper-grid {
+    display: grid;
+    /* 3 colonnes, 3 lignes auto-dimensionnées */
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 1.5rem;
+    width: 100%;
+    height: 100%;
+    max-height: 60vh; /* Limite la hauteur pour garder l'aspect 3x3 */
+}
+
+/* --- Cartes de jeu --- */
+.paper-card {
+    position: relative;
+    background: #fff;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    cursor: pointer;
+    overflow: hidden; /* Pour la barre de progression */
+
+    /* Style bordure "dessinée à la main" */
+    border: 3px solid var(--ink-color);
+    border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+    box-shadow: 5px 5px 0 rgba(0,0,0,0.1);
+    transition: all 0.2s ease-out;
+}
+
+/* États de survol (Souris ET Doigt) */
+.paper-card:hover, .paper-card.finger-hover {
+    transform: scale(1.05) rotate(1deg);
+    box-shadow: 8px 8px 0 rgba(0,0,0,0.15);
+    background: #fffce0; /* Légèrement jaune style post-it */
+    border-color: var(--highlight-color);
+    color: var(--highlight-color);
+}
+
+.paper-card h2 {
+    font-size: 1.8rem;
+    margin: 0;
+}
+
+.game-marker {
+    position: absolute;
+    top: 10px; left: 15px;
+    font-size: 1.2rem;
+    opacity: 0.6;
+    text-decoration: underline dashed;
+}
+
+/* --- Barre de progression (Dwell Click) --- */
+.dwell-progress-bar {
+    position: absolute;
+    bottom: 0; left: 0;
+    height: 6px;
+    width: 0%; /* Commence à 0 */
+    background-color: var(--highlight-color);
+    transition: width 0.1s linear; /* Transition fluide gérée par le JS */
+}
+
+/* --- Pagination --- */
+.paper-pagination {
+    margin-top: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 1.5rem;
+}
+
+.paper-btn {
+    background: none;
+    border: 2px dashed var(--ink-color);
+    font-family: var(--font-paper);
+    font-size: 1.2rem;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 5px;
+}
+
+.paper-btn:hover:not([disabled]), .paper-btn.finger-hover:not([disabled]) {
+    background: var(--ink-color);
+    color: var(--paper-bg);
+    transform: rotate(-2deg);
+}
+
+.paper-btn[disabled] {
+    opacity: 0.3;
+    cursor: not-allowed;
+    border-style: dotted;
+}
+
+/* --- Curseur du Doigt (Debug visuel) --- */
+.finger-cursor {
+    pointer-events: none !important; /* Le curseur devient "fantôme" pour les clics */
+    position: fixed;
+    z-index: 9999;
+    /* Styles visuels (exemples) */
+    width: 25px;
+    height: 25px;
+    border: 3px solid #0ef;
+    border-radius: 50%;
+    box-shadow: 0 0 15px #0ef;
+}
+
+
+/* --- LE MASQUE ÉCUREUIL (EFFET 3D & TRANSPARENCE) --- */

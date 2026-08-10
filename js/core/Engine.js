@@ -3,6 +3,9 @@ import { CONFIG } from './Config.js';
 import { AudioManager } from './AudioManager.js';
 import { Header } from './Header.js';
 import { Registry } from './GameRegistry.js';
+import { PhotoBooth } from './PhotoBooth.js';
+import { Stats } from './Stats.js';
+import { playerColor } from './Theme.js';
 
 /**
  * MOTEUR
@@ -23,6 +26,8 @@ export class Engine {
 
         this.audio = new AudioManager();
         this.clock = new THREE.Clock();
+        this.photoBooth = new PhotoBooth(this);
+        this.stats = new Stats(this);
 
         this.dwellTime = CONFIG.engine.dwellTime;
         this.cursors = {};
@@ -31,6 +36,8 @@ export class Engine {
         // inutile de le requêter 120 fois par seconde.
         this._interactives = [];
         this._interactivesDirty = true;
+        this._rects = [];
+        this._rectsTime = 0;
 
         this._onKeyDown = (e) => this._handleKey(e);
         window.addEventListener('keydown', this._onKeyDown);
@@ -49,6 +56,8 @@ export class Engine {
             if (this.currentState && this.currentState.isMenu) return;
             this.loadGame('menu_holo');
         }
+        if (key === 'c') this.photoBooth.start();
+        if (key === 'f') this.stats.toggle();
     }
 
     // ==========================================================
@@ -61,7 +70,7 @@ export class Engine {
         const cursorDiv = document.createElement('div');
         cursorDiv.className = 'virtual-cursor';
         cursorDiv.id = `cursor-p${id}`;
-        cursorDiv.style.setProperty('--cursor-color', id === 0 ? '#00ffff' : '#ff00ff');
+        cursorDiv.style.setProperty('--cursor-color', playerColor(id));
         cursorDiv.innerHTML = `
             <div class="cursor-scaler">
                 <svg class="progress-ring" width="60" height="60" viewBox="0 0 60 60">
@@ -95,13 +104,28 @@ export class Engine {
                 document.querySelectorAll('#ui-header button, #ui-header .switch-opt, .interactive')
             );
             this._interactivesDirty = false;
+            this._rectsTime = 0;
         }
         return this._interactives;
     }
 
+    /**
+     * getBoundingClientRect() force un recalcul de mise en page : le faire
+     * pour chaque bouton, deux joueurs, 60 fois par seconde coûtait cher.
+     * On rafraîchit les positions 4 fois par seconde, c'est largement assez.
+     */
+    _getInteractiveRects(now) {
+        if (now - this._rectsTime > 250) {
+            this._rectsTime = now;
+            this._rects = this._getInteractives()
+                .filter((el) => el.isConnected && el.offsetParent !== null)
+                .map((el) => ({ el, rect: el.getBoundingClientRect() }));
+        }
+        return this._rects;
+    }
+
     updateVirtualCursor() {
         const now = performance.now();
-        const interactives = this._getInteractives();
 
         for (const playerId of [0, 1]) {
             const player = this.inputs.players[playerId];
@@ -117,9 +141,7 @@ export class Engine {
             cursor.el.style.transform = `translate3d(${player.x}px, ${player.y}px, 0)`;
 
             let hovered = null;
-            for (const el of interactives) {
-                if (!el.isConnected || el.offsetParent === null) continue;
-                const rect = el.getBoundingClientRect();
+            for (const { el, rect } of this._getInteractiveRects(now)) {
                 if (player.x >= rect.left && player.x <= rect.right &&
                     player.y >= rect.top && player.y <= rect.bottom) {
                     hovered = el;
@@ -292,12 +314,21 @@ export class Engine {
         try {
             this.inputs.update(timestamp, this.display);
             this.updateVirtualCursor();
+            this.photoBooth.update(dt);
             this.display.beginFrame();
 
             if (this.currentState) {
                 if (this.currentState.update) this.currentState.update(dt);
                 if (this.currentState.render) this.currentState.render(this.display);
             }
+
+            // La capture lit les canvas AVANT que le navigateur ne présente
+            // (et vide) le buffer WebGL — et avant les surcouches de debug,
+            // pour que la photo ne montre que le jeu.
+            this.photoBooth.flushPending();
+
+            this.photoBooth.render(this.display.ctx, this.display.virtW, this.display.virtH);
+            this.stats.render(this.display.ctx, dt);
             this.display.done();
         } catch (error) {
             // Un jeu qui plante ne doit pas figer toute la borne

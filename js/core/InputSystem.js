@@ -56,6 +56,17 @@ export class InputSystem {
         this._lastFrameTime = 0;
         this._results = { hand: null, pose: null, face: null };
 
+        // Auto-régulation : coût moyen d'une analyse, et détection des
+        // nouvelles images webcam pour ne jamais analyser deux fois la même.
+        this._detectionBudget = 0;
+        this._videoFrameSeen = false;
+        this._hasFrameCallback = false;
+        this.lastInferenceMs = 0;
+
+        // Tampons réutilisés : le miroir des landmarks de pose était
+        // recréé à chaque frame (33 objets × 2 joueurs × 60 fps).
+        this._mirrorBuffers = [[], []];
+
         // Mémoire de détection : évite le clignotement quand l'IA rate une frame
         this._lostFrames = [0, 0];
         this._lastGoodPlayers = [null, null];
@@ -255,7 +266,7 @@ export class InputSystem {
 
             if (this.enablePose) {
                 target.pose = { raw: det.pose };
-                target.poseLandmarks = det.pose.map((p) => ({ ...p, x: 1 - p.x }));
+                target.poseLandmarks = this._mirror(target.id, det.pose);
             }
             if (this.enableFace) {
                 target.face = { raw: det.face, mouthOpen: det.mouthOpen, nose: { x: target.x, y: target.y } };
@@ -302,18 +313,30 @@ export class InputSystem {
     }
 
     /**
-     * Lance les détecteurs actifs, au maximum `CONFIG.vision.maxFps` fois
-     * par seconde. Entre deux analyses, on réutilise le dernier résultat.
+     * Lance les détecteurs actifs.
+     *
+     * Trois garde-fous, dans cet ordre :
+     *   1. la webcam tourne à ~30 fps, l'écran à 60 : inutile d'analyser
+     *      deux fois la même image (`_videoFrameSeen`) ;
+     *   2. plafond `CONFIG.vision.maxFps` ;
+     *   3. si une analyse a duré trop longtemps, on lève le pied
+     *      automatiquement (`_detectionBudget`) au lieu de saccader.
      */
     _runDetectors(timestamp) {
-        const minInterval = 1000 / CONFIG.vision.maxFps;
-        if (timestamp - this._lastDetectionTime < minInterval) return;
         if (this.video.readyState < 2) return;
+        if (this._hasFrameCallback && !this._videoFrameSeen) return;
+
+        const minInterval = Math.max(1000 / CONFIG.vision.maxFps, this._detectionBudget);
+        if (timestamp - this._lastDetectionTime < minInterval) return;
+
         this._lastDetectionTime = timestamp;
+        this._videoFrameSeen = false;
 
         // MediaPipe exige des timestamps strictement croissants
         const ts = Math.max(Math.round(timestamp), this._lastTimestamp + 1);
         this._lastTimestamp = ts;
+
+        const started = performance.now();
 
         this.analysisCtx.drawImage(
             this.video, 0, 0,
@@ -334,6 +357,24 @@ export class InputSystem {
             // Une frame ratée ne doit jamais tuer la boucle de jeu
             console.warn('⚠️ Détection ignorée pour cette frame :', error);
         }
+
+        // Moyenne glissante du coût d'une analyse. Sur une machine lente,
+        // on espace les inférences pour garder un rendu fluide.
+        const elapsed = performance.now() - started;
+        this.lastInferenceMs = elapsed;
+        this._detectionBudget = this._detectionBudget * 0.9 + elapsed * 1.2 * 0.1;
+    }
+
+    /** Prévient dès qu'une nouvelle image webcam est disponible. */
+    _watchVideoFrames() {
+        this._hasFrameCallback = typeof this.video.requestVideoFrameCallback === 'function';
+        if (!this._hasFrameCallback) return;
+
+        const onFrame = () => {
+            this._videoFrameSeen = true;
+            this.video.requestVideoFrameCallback(onFrame);
+        };
+        this.video.requestVideoFrameCallback(onFrame);
     }
 
     /** Choisit le joueur 1 ou 2 selon la moitié d'écran occupée. */
@@ -361,8 +402,23 @@ export class InputSystem {
             target.y = this._smoothValue(target.id, 'y', pos.y, dt);
 
             target.pose = { raw: lm };
-            target.poseLandmarks = lm.map((p) => ({ ...p, x: 1 - p.x }));
+            target.poseLandmarks = this._mirror(target.id, lm);
         }
+    }
+
+    /** Version miroir des landmarks, écrite dans un tampon réutilisé. */
+    _mirror(playerId, landmarks) {
+        const buffer = this._mirrorBuffers[playerId];
+        for (let i = 0; i < landmarks.length; i++) {
+            const source = landmarks[i];
+            const point = buffer[i] || (buffer[i] = { x: 0, y: 0, z: 0, visibility: 1 });
+            point.x = 1 - source.x;
+            point.y = source.y;
+            point.z = source.z;
+            point.visibility = source.visibility;
+        }
+        buffer.length = landmarks.length;
+        return buffer;
     }
 
     _applyHands(display, dt, p1, p2, draw) {
@@ -572,6 +628,7 @@ export class InputSystem {
             onStatus('OUVERTURE DE LA CAMÉRA...', 65);
             await this._setupCamera();
 
+            this._watchVideoFrames();
             this.mode = 'vision';
             this.isReady = true;
             console.log('✅ InputSystem : mode VISION (2 joueurs, fantôme via G)');

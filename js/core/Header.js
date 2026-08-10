@@ -27,7 +27,8 @@ export class Header {
             </div>
 
             <div class="header-group right">
-                <button id="btn-sound" class="btn-round" type="button" aria-label="Couper le son">🔊</button>
+                <button id="btn-photo" class="btn-round" type="button" aria-label="Prendre une photo" title="Photo (C)">📷</button>
+                <button id="btn-sound" class="btn-round" type="button" aria-label="Couper le son" title="Son">🔊</button>
             </div>
         `;
         document.body.appendChild(this.dom);
@@ -37,6 +38,7 @@ export class Header {
 
     bindEvents() {
         this.dom.querySelector('#btn-sound').addEventListener('click', () => this.toggleSound());
+        this.dom.querySelector('#btn-photo').addEventListener('click', () => this.engine.photoBooth.start());
         this.dom.querySelector('#btn-quit').addEventListener('click', () => this.engine.loadGame('menu_holo'));
 
         this.dom.querySelectorAll('.switch-opt').forEach((opt) => {

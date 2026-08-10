@@ -1,5 +1,5 @@
 import { Game } from '../core/Game.js';
-import { Registry } from '../core/GameRegistry.js';
+import { registerGame } from '../core/GameRegistry.js';
 
 export class NeonBrickBattle extends Game {
     constructor(game) {
@@ -20,8 +20,8 @@ export class NeonBrickBattle extends Game {
         this.ball = { x: 0, y: 0, vx: 0, vy: 0, trail: [] };
         this.ballSpeed = this.ballSpeedBase;
         
-        this.p1 = { score: 0, lives: 5, x: 0, y: 0, color: '#00ffff' }; 
-        this.p2 = { score: 0, lives: 5, x: 0, y: 0, color: '#ff00ff' };
+        this.p1 = { score: 0, lives: 5, x: 0, y: 0, color: '#7dd3fc' }; 
+        this.p2 = { score: 0, lives: 5, x: 0, y: 0, color: '#fbbf24' };
         this.winner = null;
 
         this.bricks = [];
@@ -74,7 +74,7 @@ export class NeonBrickBattle extends Game {
         const startX = (w - totalW) / 2;
         const startY = (h - (rows * (brickH + gap))) / 2;
 
-        const colors = ['#ff0055', '#55ff00', '#00ffff', '#ffff00'];
+        const colors = ['#fb7185', '#55ff00', '#7dd3fc', '#fde68a'];
 
         for (let c = 0; c < cols; c++) {
             for (let r = 0; r < rows; r++) {
@@ -461,4 +461,12 @@ export class NeonBrickBattle extends Game {
     }
 }
 
-Registry.register('neon_bricks_vs', "NEON BATTLE 2D", NeonBrickBattle, "#00ffff");
+registerGame({
+    id: 'neon_bricks_vs',
+    name: 'NEON BATTLE',
+    icon: '🧱',
+    color: '#38bdf8',
+    players: 2,
+    description: 'Duel de raquettes : renvoyez la balle et cassez le mur adverse.',
+    class: NeonBrickBattle
+});

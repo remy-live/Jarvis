@@ -1,5 +1,5 @@
 import { Game } from '../core/Game.js';
-import { Registry } from '../core/GameRegistry.js';
+import { registerGame } from '../core/GameRegistry.js';
 import { GameOverModal } from '../core/GameOverModal.js';
 
 export class ShurikenShowdown extends Game {
@@ -8,7 +8,7 @@ export class ShurikenShowdown extends Game {
         this.game = game;
         this.id = 'shuriken_showdown';
         this.name = 'SHURIKEN SHOWDOWN';
-        this.color = '#e74c3c'; 
+        this.color = '#fb7185'; 
         this.isMenu = false;
 
         this.modal = new GameOverModal(this.game);
@@ -49,7 +49,7 @@ export class ShurikenShowdown extends Game {
 
         this.playersState = [
             this.createPlayer(0, '#3498db', 'BLUE', w * 0.15, h), // Cible à gauche
-            this.createPlayer(1, '#e74c3c', 'RED', w * 0.85, h)   // Cible à droite
+            this.createPlayer(1, '#fb7185', 'RED', w * 0.85, h)   // Cible à droite
         ];
 
         this.projectiles = [];
@@ -400,4 +400,12 @@ export class ShurikenShowdown extends Game {
     }
 }
 
-Registry.register('shuriken_showdown', "SHURIKEN SHOWDOWN", ShurikenShowdown, "#e74c3c");
+registerGame({
+    id: 'shuriken_showdown',
+    name: 'SHURIKEN SHOWDOWN',
+    icon: '🥷',
+    color: '#fb7185',
+    players: 2,
+    description: 'Lancez vos shurikens d\'un mouvement sec du bras.',
+    class: ShurikenShowdown
+});

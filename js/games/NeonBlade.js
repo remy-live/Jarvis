@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Registry } from '../core/GameRegistry.js';
+import { registerGame } from '../core/GameRegistry.js';
 
 export class NeonBlade {
     constructor(game) {
@@ -299,7 +299,7 @@ export class NeonBlade {
         const ctx = display.ctx;
         ctx.save();
         ctx.font = "bold 60px 'Orbitron'";
-        ctx.fillStyle = "#00ffff";
+        ctx.fillStyle = "#7dd3fc";
         ctx.strokeStyle = "rgba(0,0,0,0.5)";
         ctx.lineWidth = 4;
         ctx.textAlign = "center";
@@ -325,4 +325,12 @@ export class NeonBlade {
     }
 }
 
-Registry.register("NEON BLADE", NeonBlade, "#00ffff");
+registerGame({
+    id: 'neon_blade',
+    name: 'NEON BLADE',
+    icon: '⚔️',
+    color: '#22d3ee',
+    players: 1,
+    hidden: true, // prototype 3D, pas encore dans le menu
+    class: NeonBlade
+});

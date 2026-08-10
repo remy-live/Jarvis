@@ -3,18 +3,8 @@ import { Display } from './core/Display.js';
 import { InputSystem } from './core/InputSystem.js';
 import { Engine } from './core/Engine.js';
 
-// --- MENU PRINCIPAL ---
-import { MenuHolo } from './games/MenuHolo.js';
-
-// --- JEUX ---
-// Le simple fait de les importer les inscrit dans le Registry,
-// et le menu se construit tout seul à partir de cette liste.
-import './games/NeonBrickBattle.js';
-import './games/NutsGame.js';
-import './games/NeonInvaders.js';
-import './games/FlappySquat.js';
-import './games/FruitBlade.js';
-import './games/ShurikenShowdown.js';
+// Catalogue des jeux : pour en ajouter un, tout se passe dans ce fichier.
+import { MenuHolo } from './games/index.js';
 
 class JarvisArcade {
     constructor() {

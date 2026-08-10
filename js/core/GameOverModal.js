@@ -1,4 +1,5 @@
 import { CONFIG } from './Config.js';
+import { THEME } from './Theme.js';
 
 /**
  * MODALE DE FIN DE PARTIE
@@ -72,7 +73,9 @@ export class GameOverModal {
 
         const scoreDiv = this.dom.querySelector('#modal-score-text');
         if (scoreInfo && typeof scoreInfo === 'object') {
-            scoreDiv.innerHTML = `P1: <span style="color:#f1c40f">${scoreInfo.p1}</span> | P2: <span style="color:#e74c3c">${scoreInfo.p2}</span>`;
+            scoreDiv.innerHTML = `<span style="color:${THEME.player1}">P1 ${scoreInfo.p1}</span>`
+                + `<span style="color:${THEME.textMuted}"> · </span>`
+                + `<span style="color:${THEME.player2}">P2 ${scoreInfo.p2}</span>`;
         } else {
             scoreDiv.textContent = typeof scoreInfo === 'number' ? `SCORE: ${scoreInfo}` : String(scoreInfo);
         }
