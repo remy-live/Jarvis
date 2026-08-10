@@ -1,0 +1,14 @@
+# Dépendances lourdes récupérées par `npm run setup`
+assets/models/
+assets/wasm/
+
+# Système / éditeurs
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Node
+node_modules/
+npm-debug.log*

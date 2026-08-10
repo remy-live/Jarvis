@@ -189,119 +189,118 @@ h1.glitch {
 
 
 
-/* --- HEADER GLOBAL --- */
+/* ---------------------------------------------------------
+   5. BANDEAU SUPÉRIEUR (HEADER)
+   Barre transparente : seuls les boutons captent les clics.
+--------------------------------------------------------- */
 #ui-header {
     position: absolute;
-    top: 0; left: 0; width: 100%;
-    height: 60px;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100px;
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 0 20px;
-    box-sizing: border-box;
-    z-index: 1000; /* Toujours au-dessus */
-    
-    /* Effet Verre (Glassmorphism) */
+    align-items: flex-start;
+    padding: 20px 30px;
+    z-index: 1000;
+
     color: white;
-    font-family: 'Arial', sans-serif;
+    font-family: 'Orbitron', sans-serif;
     font-weight: bold;
     text-shadow: 1px 1px 2px black;
-    transition: transform 0.3s ease;
+
+    background: transparent;
+    pointer-events: none; /* les clics traversent le vide... */
 }
 
-/* Scores */
-.score-box {
-    font-size: 24px;
-    min-width: 100px;
-}
-#score-p2 { text-align: right; margin-right: 15px; color: #f1c40f; }
-
-/* Centre (Switch & Bouton Quitter) */
-.header-center {
-    position: absolute;
-    left: 50%; top: 50%;
-    transform: translate(-50%, -50%);
-    display: flex; gap: 10px;
+.header-group {
+    pointer-events: auto; /* ...mais pas les boutons */
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
-/* Bouton Quitter */
-.btn-quit {
-    background: #e74c3c;
-    color: white;
-    border: 2px solid #c0392b;
-    padding: 8px 20px;
-    border-radius: 20px;
+/* Élément masqué : doit gagner contre les display:flex ci-dessous */
+[hidden] { display: none !important; }
+
+/* Bouton rétro (retour menu) */
+.btn-retro {
+    font-family: 'Orbitron', sans-serif;
     font-weight: bold;
+    border: 2px solid white;
+    border-radius: 8px;
+    padding: 10px 20px;
     cursor: pointer;
-    display: none; /* Caché par défaut */
+    color: white;
+    text-transform: uppercase;
+    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.5);
+    transition: transform 0.1s;
 }
-.btn-quit:hover { background: #ff6b6b; }
+.btn-retro:active { transform: translateY(4px); box-shadow: none; }
+.btn-retro.red { background: #e74c3c; }
+.btn-retro.red:hover { background: #ff6b6b; }
 
-/* Switch 1J / 2J */
+/* Bouton rond (son) */
+.btn-round {
+    width: 50px; height: 50px;
+    border-radius: 50%;
+    border: 2px solid white;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s, background 0.2s;
+}
+.btn-round:hover { transform: scale(1.1); background: rgba(0, 0, 0, 0.8); }
+
+/* Sélecteur 1 joueur / 2 joueurs */
 .player-switch {
     display: flex;
-    background: rgba(0,0,0,0.5);
-    border-radius: 20px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 2px solid white;
+    border-radius: 25px;
     overflow: hidden;
-    border: 1px solid rgba(255,255,255,0.3);
-    cursor: pointer;
 }
 .switch-opt {
-    padding: 8px 15px;
+    padding: 10px 20px;
+    color: #bbb;
+    cursor: pointer;
+    font-family: 'Orbitron', sans-serif;
     font-size: 14px;
-    color: #aaa;
-    transition: 0.3s;
+    transition: background 0.2s, color 0.2s;
 }
 .switch-opt.active {
-    background: #3498db;
-    color: white;
-    font-weight: bold;
+    background: var(--color-neon);
+    color: #000;
+    box-shadow: 0 0 15px var(--color-neon);
 }
 
-/* Bouton Son */
-.btn-sound {
-    background: none;
-    border: none;
-    font-size: 24px;
-    cursor: pointer;
-    color: white;
-    filter: drop-shadow(0 2px 2px rgba(0,0,0,0.5));
+/* Badge d'information (ex : "MODE SOURIS") */
+.header-notice {
+    padding: 8px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 20px;
+    background: rgba(0, 0, 0, 0.5);
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: #ffcc00;
 }
 
 
-
-
-
-
-
-
-
-// JEU 
-
-/* --- UI JEU NOISETTES (DOM OVERLAY) --- */
-
-/* Le conteneur du masque et des noisettes */
+/* ---------------------------------------------------------
+   6. COUCHE DE JEU 2D (DOM)
+--------------------------------------------------------- */
 #nuts-game-layer {
     position: absolute;
     top: 0; left: 0;
     width: 100%; height: 100%;
-    pointer-events: none; /* Laisse passer les clics si besoin */
+    pointer-events: none;
     overflow: hidden;
-    z-index: 10; /* Au-dessus du Canvas 3D */
+    z-index: 10;
 }
-
-
-
-
-#layer-2d {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    z-index: 2; /* Au-dessus de la 3D, en dessous de l'UI */
-    pointer-events: none; /* Laisse passer les clics sauf sur le menu */
-}
-
-
 
 
 :root {
@@ -312,6 +311,7 @@ h1.glitch {
     --font-paper: 'Patrick Hand', cursive, sans-serif;
 }
 
+
 /* --- CURSEUR VIRTUEL (DWELL CLICK) --- */
 
 .virtual-cursor {
@@ -320,7 +320,7 @@ h1.glitch {
     pointer-events: none;
     z-index: 9999;
     display: none; /* Caché par défaut */
-    transition: top 0.05s linear, left 0.05s linear; /* Mouvement fluide */
+    transition: transform 0.05s linear; /* Mouvement fluide */
     
     /* Couleur par défaut (sera écrasée par le JS) */
     --cursor-color: #00ffff; 
@@ -924,3 +924,98 @@ h1.glitch {
 
 #btn-menu { border-color: #ff0055; color: #ff0055; }
 #btn-menu:hover { background: #ff0055; color: white; box-shadow: 0 0 20px #ff0055; }
+
+/* ---------------------------------------------------------
+   ÉCRAN DE BOOT : ERREUR / MODE DE SECOURS
+--------------------------------------------------------- */
+#boot-error {
+    margin-top: 25px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.8rem;
+    line-height: 1.9;
+    color: #ddd;
+}
+
+#boot-error-text strong {
+    display: inline-block;
+    margin-bottom: 12px;
+    color: #ffcc00;
+}
+
+.boot-keys {
+    display: inline-block;
+    padding: 2px 8px;
+    margin: 0 2px;
+    border: 1px solid rgba(0, 255, 255, 0.5);
+    border-radius: 4px;
+    background: rgba(0, 255, 255, 0.08);
+    color: var(--color-neon);
+    font-size: 0.75rem;
+}
+
+#boot-continue {
+    margin-top: 22px;
+    padding: 12px 26px;
+    border: 2px solid var(--color-neon);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--color-neon);
+    font-family: 'Orbitron', sans-serif;
+    font-weight: bold;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+}
+
+#boot-continue:hover,
+#boot-continue:focus-visible {
+    background: var(--color-neon);
+    color: #000;
+    box-shadow: 0 0 20px var(--color-neon);
+    outline: none;
+}
+
+
+/* ---------------------------------------------------------
+   MENU HOLO : COMPLÉMENTS
+--------------------------------------------------------- */
+.holo-hint {
+    margin-top: 28px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.7rem;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.55);
+    text-align: center;
+}
+
+.holo-empty {
+    padding: 40px;
+    color: #ff5577;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+/* Petit "flash" au lancement d'un jeu */
+.holo-card--launching {
+    transform: scale(0.9);
+    border-color: #fff !important;
+    box-shadow: 0 0 30px #fff !important;
+}
+
+/* Couleur d'accent fournie par le Registry */
+.holo-card[style*="--card-color"]:hover {
+    border-color: var(--card-color);
+    box-shadow: 0 0 20px var(--card-color);
+}
+
+
+/* ---------------------------------------------------------
+   ACCESSIBILITÉ : RESPECT DE "RÉDUIRE LES ANIMATIONS"
+--------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
