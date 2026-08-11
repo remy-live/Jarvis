@@ -1,6 +1,7 @@
 import { HandLandmarker, PoseLandmarker, FaceLandmarker, FilesetResolver } from '../vendor/vision_bundle.js';
 import { CONFIG } from '../core/Config.js';
 import { FallbackInput } from './FallbackInput.js';
+import { VisionWorkerClient } from './VisionWorkerClient.js';
 
 /**
  * SYSTÈME D'ENTRÉES
@@ -64,6 +65,13 @@ export class InputSystem {
         this._detectorCursor = 0;
         this._videoFrameId = 0;
         this._drawnFrameId = -1;
+
+        // 'worker' : l'inférence tourne dans un Web Worker et ne bloque
+        // jamais le rendu. 'main' : chemin synchrone historique (secours).
+        this.backend = 'main';
+        this.workerClient = null;
+        this._lastPumpTime = 0;
+        this._grabbingFrame = false;
         this.lastInferenceMs = 0;
         this.trackedPlayers = CONFIG.vision.defaultPlayers;
 
@@ -211,11 +219,15 @@ export class InputSystem {
 
         if (this.mode !== 'vision') return;
 
-        // setOptions est asynchrone : on ignore les erreurs éventuelles,
-        // le détecteur continue simplement avec son réglage précédent.
-        this.handLandmarker?.setOptions({ numHands: wanted }).catch(noop);
-        this.poseLandmarker?.setOptions({ numPoses: wanted }).catch(noop);
-        this.faceLandmarker?.setOptions({ numFaces: wanted }).catch(noop);
+        if (this.backend === 'worker') {
+            this.workerClient.setPlayers(wanted);
+        } else {
+            // setOptions est asynchrone : on ignore les erreurs éventuelles,
+            // le détecteur continue simplement avec son réglage précédent.
+            this.handLandmarker?.setOptions({ numHands: wanted }).catch(noop);
+            this.poseLandmarker?.setOptions({ numPoses: wanted }).catch(noop);
+            this.faceLandmarker?.setOptions({ numFaces: wanted }).catch(noop);
+        }
 
         console.log(`⚙️ INPUTS: suivi de ${wanted} joueur(s)`);
     }
@@ -228,6 +240,13 @@ export class InputSystem {
         this.enableHands = config.hands !== false; // activé par défaut (curseur)
         this.enableFace = config.face === true;
         this.enablePose = config.pose === true;
+
+        this.workerClient?.setConfig({
+            hands: this.enableHands,
+            pose: this.enablePose,
+            face: this.enableFace
+        });
+
         console.log(`⚙️ INPUTS: mains=${this.enableHands} pose=${this.enablePose} visage=${this.enableFace}`);
     }
 
@@ -379,6 +398,11 @@ export class InputSystem {
         const active = this._activeDetectors();
         if (active.length === 0) return;
 
+        if (this.backend === 'worker') {
+            this._pumpWorker(timestamp);
+            return;
+        }
+
         const minInterval = Math.max(1000 / CONFIG.vision.maxFps, this._detectionBudget);
         if (timestamp - this._lastDetectionTime < minInterval) return;
 
@@ -435,6 +459,41 @@ export class InputSystem {
         // il faut au moins `coût / part` millisecondes entre deux analyses.
         const target = elapsed / Math.max(0.05, CONFIG.vision.maxLoadRatio);
         this._detectionBudget = this._detectionBudget * 0.85 + target * 0.15;
+    }
+
+    /**
+     * Envoie l'image courante au worker de vision.
+     *
+     * Aucun plafond de charge ici : l'inférence ne bloque plus le rendu,
+     * on est seulement limité par la cadence caméra et par le worker
+     * lui-même (une seule image en vol, les autres sont sautées).
+     */
+    _pumpWorker(timestamp) {
+        if (this.workerClient.busy || this._grabbingFrame) return;
+        if (timestamp - this._lastPumpTime < 1000 / CONFIG.vision.maxFps) return;
+
+        this._lastPumpTime = timestamp;
+        this._videoFrameSeen = false;
+
+        const ts = Math.max(Math.round(timestamp), this._lastTimestamp + 1);
+        this._lastTimestamp = ts;
+
+        // createImageBitmap est asynchrone et le transfert est zéro copie
+        this._grabbingFrame = true;
+        createImageBitmap(this.video).then(
+            (bitmap) => {
+                this._grabbingFrame = false;
+                this.workerClient.sendFrame(bitmap, ts);
+            },
+            () => { this._grabbingFrame = false; }
+        );
+    }
+
+    /** Résultat d'analyse renvoyé par le worker. */
+    _onWorkerResult({ kind, payload, ms }) {
+        this._results[kind] = payload;
+        this.lastInferenceMs = ms;
+        this._lastDetectionTime = performance.now();
     }
 
     /** Prévient dès qu'une nouvelle image webcam est disponible. */
@@ -733,13 +792,32 @@ export class InputSystem {
 
         let lastError = null;
 
+        // 1. Web Worker : l'inférence ne bloquera jamais le rendu
+        if (VisionWorkerClient.isSupported) {
+            for (const source of sources) {
+                try {
+                    if (source.label === 'cdn') {
+                        console.warn('⚠️ Modèles locaux absents, repli sur le CDN MediaPipe.');
+                        onStatus('MODÈLES IA : TÉLÉCHARGEMENT...', 45);
+                    }
+                    await this._initWorker(source);
+                    this.backend = 'worker';
+                    this.modelSource = source.label;
+                    console.log('✅ Vision : inférence dans un Web Worker.');
+                    return;
+                } catch (error) {
+                    lastError = error;
+                }
+            }
+            console.warn('⚠️ Worker de vision indisponible, inférence sur le thread principal.', lastError);
+        }
+
+        // 2. Secours : chemin synchrone historique
         for (const source of sources) {
             try {
-                if (source.label === 'cdn') {
-                    console.warn('⚠️ Modèles locaux absents, repli sur le CDN MediaPipe.');
-                    onStatus('MODÈLES IA : TÉLÉCHARGEMENT...', 45);
-                }
+                if (source.label === 'cdn') onStatus('MODÈLES IA : TÉLÉCHARGEMENT...', 45);
                 await this._createLandmarkers(source);
+                this.backend = 'main';
                 this.modelSource = source.label;
                 return;
             } catch (error) {
@@ -750,6 +828,40 @@ export class InputSystem {
         // MediaPipe rejette parfois avec un Event nu, illisible pour
         // l'utilisateur : on renvoie une cause explicite.
         throw Object.assign(new Error('MODELS_UNAVAILABLE'), { cause: lastError });
+    }
+
+    async _initWorker({ wasm, models }) {
+        // Le worker résout les chemins relatifs depuis SON dossier :
+        // on lui donne des URL absolues, calculées depuis la page.
+        const absolute = (path) => new URL(path, document.baseURI).href;
+
+        this.workerClient = new VisionWorkerClient();
+        this.workerClient.onResult = (msg) => this._onWorkerResult(msg);
+
+        try {
+            await this.workerClient.init({
+                wasm: absolute(wasm),
+                models: {
+                    hand: absolute(models.hand),
+                    pose: absolute(models.pose),
+                    face: absolute(models.face)
+                },
+                delegate: CONFIG.vision.delegate,
+                players: this.trackedPlayers,
+                analysisWidth: CONFIG.vision.analysisWidth,
+                analysisHeight: CONFIG.vision.analysisHeight
+            });
+        } catch (error) {
+            this.workerClient = null;
+            throw error;
+        }
+
+        this.workerClient.setConfig({
+            hands: this.enableHands,
+            pose: this.enablePose,
+            face: this.enableFace
+        });
+        this._lastPumpTime = 0;
     }
 
     _localSources() {

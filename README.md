@@ -218,11 +218,17 @@ Chaque détecteur inutile coûte environ 30 % de CPU pour rien.
 ## Performances
 
 Le point critique tient en une phrase : **l'analyse d'image de MediaPipe est
-synchrone**. Tant qu'elle calcule, la page entière est figée — une analyse à
-40 ms, c'est deux frames perdues d'un coup. Tout le reste en découle.
+synchrone**. Tant qu'elle calcule, le fil qui l'exécute est figé — une analyse
+à 40 ms, c'est deux frames perdues d'un coup. Tout le reste en découle.
 
 Ce que fait le moteur pour tenir la cadence :
 
+- **l'inférence tourne dans un Web Worker.** C'est la parade principale :
+  l'analyse bloque le worker, jamais la page. Le jeu reste fluide quel que
+  soit le coût d'une inférence. Les images partent en `ImageBitmap`
+  transférés (zéro copie), une seule en vol à la fois, les autres sont
+  sautées. Si le navigateur ne s'y prête pas, l'ancien chemin synchrone
+  prend le relais tout seul ;
 - **une seule IA par cycle.** Quand un jeu a besoin du corps *et* des mains,
   les détecteurs s'alternent au lieu de cumuler leurs coûts sur la même frame ;
 - **plafond de charge.** Si une analyse coûte cher, elle est espacée pour ne
@@ -244,6 +250,10 @@ Ce que fait le moteur pour tenir la cadence :
 
 Appuyez sur `F`. La ligne « analyse » donne le coût d'une inférence et leur
 fréquence : c'est presque toujours là que part le temps.
+
+La ligne « analyse » précise où tourne l'inférence : `(worker)` — le cas
+normal, elle ne peut pas faire saccader le jeu — ou `(thread principal)`,
+le chemin de secours.
 
 | Ce que vous voyez | Ce qu'il faut faire |
 | --- | --- |

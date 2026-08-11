@@ -43,7 +43,8 @@ export class Stats {
             // chiffre à regarder quand ça saccade.
             const cost = inputs.lastInferenceMs;
             const rate = cost > 0 ? Math.min(1000 / Math.max(cost, 1), 1000 / inputs._detectionBudget) : 0;
-            lines.push(`analyse ${cost.toFixed(0)} ms  ·  ${rate.toFixed(1)}/s  ·  ${inputs.trackedPlayers} joueur(s)`);
+            const where = inputs.backend === 'worker' ? 'worker' : 'thread principal';
+            lines.push(`analyse ${cost.toFixed(0)} ms (${where})  ·  ${rate.toFixed(1)}/s  ·  ${inputs.trackedPlayers} joueur(s)`);
             lines.push(`mains ${inputs.enableHands ? 'on' : 'off'} · pose ${inputs.enablePose ? 'on' : 'off'} · visage ${inputs.enableFace ? 'on' : 'off'}`);
             if (inputs.modelSource === 'cdn') lines.push('modèles : CDN (npm run setup pour les avoir en local)');
         } else {
