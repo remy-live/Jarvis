@@ -14,6 +14,10 @@
 
 export { MenuHolo } from './MenuHolo.js';
 
+// --- Adresse et précision ---
+import './WireMaze.js';
+import './RopeBall.js';
+
 // --- Duels et défis à la main ---
 import './AirHockey.js';
 import './BubblePop.js';

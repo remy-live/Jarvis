@@ -1,7 +1,7 @@
 # 🕹️ JARVIS ARCADE
 
 Une borne d'arcade qui se joue **avec le corps** : la webcam suit vos mains,
-votre silhouette et votre visage, et pilote dix mini-jeux. Aucune manette,
+votre silhouette et votre visage, et pilote douze mini-jeux. Aucune manette,
 aucun compte, aucune donnée qui sort du navigateur — tout tourne en local.
 
 Fonctionne aussi **à la souris**, sans caméra ni modèles installés.
@@ -45,6 +45,8 @@ dans `js/core/Config.js` et retirez `assets/models/` du `.gitignore`.
 
 | Jeu | Seul | À deux | Ce qu'on fait |
 | --- | :---: | :---: | --- |
+| **Fil électrique** | ✓ | ✓ | Suivre un couloir du doigt sans toucher les bords |
+| **Corde & bille** | ✓ | ✓ | Une bille en équilibre sur une ficelle tendue entre les mains |
 | **Air Hockey** | ✓ (contre la machine) | ✓ | La main est le maillet, premier à sept buts |
 | **Bulles** | ✓ | ✓ | Pincer pour crever les bulles, enchaîner pour multiplier |
 | **Fruit Blade** | ✓ | ✓ | Trancher les fruits du doigt, éviter les bombes |
@@ -59,6 +61,13 @@ dans `js/core/Config.js` et retirez `assets/models/` du `.gitignore`.
 Le menu filtre entre **Tous**, **Seul** et **À deux** ; le bouton *Au hasard*
 choisit pour vous. À la souris, les flèches déplacent la sélection et `Entrée`
 lance la partie.
+
+**Fil électrique** vous donne un tracé qui se resserre à chaque réussite ; à
+deux, chacun sa moitié d'écran et le même parcours, c'est une course.
+**Corde & bille** simule une vraie ficelle : la bille est contrainte à
+`|bille−main gauche| + |bille−main droite| ≤ longueur`, ce qui donne le V
+caractéristique, l'équilibre au point bas et la bille qui file au bout dès
+qu'on tend trop. Seul, un bout est accroché à un piton et on joue autour.
 
 Deuxième joueur : placez-vous simplement à droite de l'image (le joueur 1 tient
 la gauche). Sans caméra, la touche `P` active un joueur 2 au clavier. La touche

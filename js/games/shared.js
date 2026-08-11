@@ -58,7 +58,9 @@ export function drawMessage(ctx, w, h, title, subtitle = '', options = {}) {
  * @param {{label:string,value:string|number,color?:string}[]} entries
  */
 export function drawScoreBar(ctx, w, entries, options = {}) {
-    const { y = 34, height = 44 } = options;
+    // Sous les boutons du bandeau : au-dessus, les colonnes latérales
+    // passaient derrière le bouton Menu et les icônes de capture.
+    const { y = 84, height = 40 } = options;
 
     ctx.save();
     ctx.textBaseline = 'middle';

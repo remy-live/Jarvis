@@ -229,7 +229,7 @@ export class BubblePop extends Game {
         });
         drawScoreBar(ctx, w, entries);
 
-        drawGauge(ctx, w / 2 - 110, 92, 220, 3, this.timeLeft / ROUND_TIME,
+        drawGauge(ctx, w / 2 - 110, 132, 220, 3, this.timeLeft / ROUND_TIME,
             this.timeLeft < 10 ? THEME.danger : THEME.accent);
 
         this._drawCombos(ctx, w, h);
