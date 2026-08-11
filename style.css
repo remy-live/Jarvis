@@ -1,0 +1,1042 @@
+/* =========================================================
+   JARVIS ARCADE — feuille de style
+   Direction artistique : gris neutres légèrement chauds, deux accents
+   désaturés (acier et sable), aucune couleur pure et aucun halo.
+   La lisibilité vient du contraste, pas de la saturation.
+   ========================================================= */
+
+:root {
+    /* --- Surfaces --- */
+    --surface-0: #101214;
+    --surface-1: #171a1d;
+    --surface-2: #1f2327;
+    --surface-3: #282d32;
+
+    /* --- Texte --- */
+    --text-strong: #e7e9ec;
+    --text: #b6bbc2;
+    --text-muted: #7b8189;
+
+    /* --- Traits & accents --- */
+    --line: rgba(255, 255, 255, 0.07);
+    --line-strong: rgba(255, 255, 255, 0.14);
+    --accent: #8fa6b8;
+    --accent-soft: rgba(143, 166, 184, 0.13);
+    --danger: #c08a86;
+
+    /* --- Joueurs --- */
+    --player-1: #8fa6b8;
+    --player-2: #c2a882;
+
+    /* --- Formes --- */
+    --radius-s: 8px;
+    --radius-m: 12px;
+    --radius-l: 18px;
+    --shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+    --blur: saturate(120%) blur(16px);
+
+    /* --- Typographie --- */
+    --font-ui: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --font-display: 'Orbitron', var(--font-ui);
+
+    /* --- Couches (z-index) --- */
+    --z-video-fullscreen: 0;
+    --z-game-layer: 10;
+    --z-video-vignette: 100;
+    --z-header: 1000;
+    --z-cursor: 9000;
+    --z-modal: 9500;
+    --z-boot: 9999;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--surface-0);
+    color: var(--text);
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+}
+
+button { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+
+
+/* =========================================================
+   1. COUCHES D'AFFICHAGE
+   ========================================================= */
+
+/* Flux webcam brut : invisible, il ne sert qu'à alimenter l'IA */
+#webcam-video {
+    position: absolute;
+    top: 0; left: 0;
+    width: 1px; height: 1px;
+    opacity: 0;
+    pointer-events: none;
+    z-index: -1;
+}
+
+#background-picture,
+#three-canvas,
+#layer-2d,
+#ui-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+#background-picture {
+    z-index: 0;
+    background: var(--surface-0);
+}
+
+#three-canvas { z-index: 1; background: transparent; }
+#layer-2d     { z-index: 2; }
+#ui-canvas    { z-index: 10; }
+
+/* Le menu doit rester cliquable au-dessus de la vidéo */
+#layer-2d > * { pointer-events: auto; }
+
+
+/* --- Retour caméra ------------------------------------- */
+
+#feedback-canvas {
+    position: fixed;
+    background: var(--surface-0);
+}
+
+/* Vignette de contrôle */
+.view-vignette {
+    width: 260px;
+    height: 195px;
+    right: 24px;
+    bottom: 24px;
+    top: auto; left: auto;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-m);
+    box-shadow: var(--shadow);
+    opacity: 0.9;
+    z-index: var(--z-video-vignette);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.view-vignette:hover { opacity: 1; }
+
+/* Fond plein écran : la webcam devient le décor */
+.view-fullscreen {
+    width: 100% !important;
+    height: 100% !important;
+    top: 0; left: 0;
+    right: auto; bottom: auto;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    object-fit: cover;
+    opacity: 0.55;              /* atténuée : le HUD reste lisible */
+    filter: saturate(0.75) contrast(1.05);
+    z-index: var(--z-video-fullscreen);
+    pointer-events: none;
+}
+
+
+/* =========================================================
+   2. ÉCRAN DE DÉMARRAGE
+   ========================================================= */
+
+#boot-screen {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-boot);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+        radial-gradient(90rem 50rem at 50% -10%, #171b1f 0%, var(--surface-0) 68%);
+    opacity: 1;
+    transition: opacity 0.7s ease-out;
+}
+
+.boot-content {
+    width: min(560px, 88vw);
+    text-align: center;
+}
+
+h1.glitch {
+    margin: 0 0 2.2rem;
+    font-family: var(--font-display);
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    font-weight: 700;
+    letter-spacing: 0.36em;
+    color: var(--text-strong);
+}
+
+.loader-track {
+    height: 2px;
+    background: var(--line);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+#loading-bar {
+    width: 0;
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#status-text {
+    margin: 1.1rem 0 0;
+    min-height: 1.2em;
+    font-size: 0.78rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+#boot-error {
+    margin-top: 1.8rem;
+    font-size: 0.86rem;
+    line-height: 2;
+    color: var(--text);
+}
+
+#boot-error-text strong {
+    display: block;
+    margin-bottom: 0.9rem;
+    font-weight: 600;
+    color: var(--text-strong);
+}
+
+.boot-keys {
+    display: inline-block;
+    padding: 2px 9px;
+    margin: 0 2px;
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    background: var(--surface-2);
+    color: var(--text-strong);
+    font-size: 0.76rem;
+}
+
+#boot-continue {
+    margin-top: 1.8rem;
+    padding: 0.8rem 1.7rem;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-s);
+    background: transparent;
+    color: var(--accent);
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+#boot-continue:hover,
+#boot-continue:focus-visible {
+    background: var(--surface-2);
+    border-color: var(--accent);
+    color: var(--text-strong);
+    outline: none;
+}
+
+
+/* =========================================================
+   3. BANDEAU SUPÉRIEUR
+   ========================================================= */
+
+#ui-header {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 24px;
+    z-index: var(--z-header);
+    background: linear-gradient(to bottom, rgba(16, 18, 20, 0.7), transparent);
+    pointer-events: none;   /* seuls les boutons captent les clics */
+}
+
+.header-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    pointer-events: auto;
+}
+
+/* --- Boutons ------------------------------------------- */
+
+.btn-pill,
+.btn-icon,
+.btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--line);
+    background: rgba(23, 26, 29, 0.78);
+    backdrop-filter: var(--blur);
+    color: var(--text);
+    cursor: pointer;
+    transition: background 0.18s, border-color 0.18s, color 0.18s;
+}
+
+.btn-pill:hover,
+.btn-icon:hover,
+.btn-ghost:hover {
+    background: var(--surface-2);
+    border-color: var(--line-strong);
+    color: var(--text-strong);
+}
+
+.btn-pill:focus-visible,
+.btn-icon:focus-visible,
+.btn-ghost:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.btn-pill {
+    height: 36px;
+    padding: 0 16px;
+    border-radius: var(--radius-s);
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.btn-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-s);
+}
+
+.btn-icon svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.btn-ghost {
+    height: 38px;
+    padding: 0 18px;
+    border-radius: var(--radius-s);
+    font-size: 0.82rem;
+    font-weight: 500;
+}
+
+/* Bouton d'enregistrement : un simple point qui devient rouge */
+.rec-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: transparent;
+    border: 2px solid currentColor;
+    transition: background 0.2s, border-color 0.2s;
+}
+#btn-record.is-recording { color: var(--danger); border-color: var(--danger); }
+#btn-record.is-recording .rec-dot {
+    background: var(--danger);
+    border-color: var(--danger);
+    animation: rec-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes rec-pulse {
+    50% { opacity: 0.35; }
+}
+
+/* --- Sélecteur de joueurs ------------------------------ */
+
+.player-switch {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    background: rgba(23, 26, 29, 0.78);
+    backdrop-filter: var(--blur);
+}
+
+.switch-opt {
+    padding: 6px 14px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.18s, color 0.18s;
+}
+.switch-opt:hover { color: var(--text); }
+.switch-opt.is-active {
+    background: var(--surface-3);
+    color: var(--text-strong);
+}
+
+/* --- Badge d'information ------------------------------- */
+
+.header-notice {
+    padding: 7px 13px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    background: rgba(23, 26, 29, 0.78);
+    color: var(--player-2);
+    font-size: 0.72rem;
+    font-weight: 500;
+}
+
+
+/* =========================================================
+   4. CURSEUR VIRTUEL (validation par survol)
+   ========================================================= */
+
+.virtual-cursor {
+    position: absolute;
+    top: 0; left: 0;
+    width: 0; height: 0;
+    display: none;
+    pointer-events: none;
+    z-index: var(--z-cursor);
+    transition: transform 0.05s linear;
+    --cursor-color: var(--player-1);
+}
+
+.cursor-scaler {
+    position: absolute;
+    top: 0; left: 0;
+    width: 60px; height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: translate(-50%, -50%);
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.cursor-dot {
+    position: absolute;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--cursor-color);
+    box-shadow: 0 0 0 3px rgba(16, 18, 20, 0.6);
+}
+
+.progress-ring { transform: rotate(-90deg); overflow: visible; }
+
+.ring-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.16);
+    stroke-width: 2;
+}
+
+.ring-progress {
+    fill: none;
+    stroke: var(--cursor-color);
+    stroke-width: 3;
+    stroke-dasharray: 138;
+    stroke-dashoffset: 138;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.05s linear;
+}
+
+.cursor-locked .cursor-scaler { transform: translate(-50%, -50%) scale(1.22); }
+.cursor-clicked .ring-progress {
+    stroke: var(--text-strong);
+    transition: none;
+}
+
+
+/* =========================================================
+   5. MENU PRINCIPAL
+   ========================================================= */
+
+.menu {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 22px;
+    padding: 96px 5vw 40px;
+    background: linear-gradient(to bottom, rgba(16, 18, 20, 0.5), rgba(16, 18, 20, 0.86));
+}
+
+.menu__head { text-align: center; }
+
+.menu__eyebrow {
+    margin: 0 0 8px;
+    font-size: 0.64rem;
+    font-weight: 500;
+    letter-spacing: 0.38em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.menu__title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: clamp(1.6rem, 3.4vw, 2.4rem);
+    font-weight: 400;
+    letter-spacing: 0.18em;
+    color: var(--text-strong);
+}
+.menu__title span { color: var(--accent); }
+
+/* --- Filtres ------------------------------------------- */
+
+.menu__filters {
+    display: flex;
+    gap: 6px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    background: rgba(23, 26, 29, 0.7);
+}
+
+.chip {
+    padding: 7px 16px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.18s, color 0.18s;
+}
+.chip:hover, .chip.is-targeted { color: var(--text); }
+.chip.is-active {
+    background: var(--surface-3);
+    color: var(--text-strong);
+}
+
+/* --- Grille de jeux ------------------------------------ */
+
+.menu__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(272px, 1fr));
+    gap: 12px;
+    width: min(1120px, 100%);
+    max-height: 54vh;
+    overflow-y: auto;
+    padding: 2px;
+}
+
+.menu__empty {
+    grid-column: 1 / -1;
+    padding: 40px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.card {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    background: rgba(23, 26, 29, 0.76);
+    backdrop-filter: var(--blur);
+    text-align: left;
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.2s, background 0.2s, transform 0.18s;
+}
+
+/* Liseré coloré propre à chaque jeu */
+.card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--card-accent, var(--accent));
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.card:hover,
+.card:focus-visible,
+.card.is-focused,
+.card.is-targeted {
+    border-color: var(--card-accent, var(--accent));
+    background: var(--surface-2);
+    transform: translateY(-2px);
+    outline: none;
+}
+.card:hover::before,
+.card.is-focused::before,
+.card.is-targeted::before { opacity: 1; }
+
+.card.is-launching {
+    transform: scale(0.98);
+    border-color: var(--text-strong);
+}
+
+.card__icon {
+    flex: 0 0 auto;
+    width: 44px; height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--radius-s);
+    background: var(--surface-3);
+    font-size: 1.35rem;
+}
+
+.card__body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.card__name {
+    font-family: var(--font-display);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--text-strong);
+}
+
+.card__desc {
+    font-size: 0.74rem;
+    line-height: 1.4;
+    color: var(--text-muted);
+}
+
+.card__players {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding: 3px 9px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 0.66rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+}
+
+/* --- Pied de menu -------------------------------------- */
+
+.menu__foot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.menu__random {
+    padding: 9px 20px;
+    border: 1px dashed var(--line-strong);
+    border-radius: var(--radius-s);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.18s, border-color 0.18s, background 0.18s;
+}
+.menu__random:hover,
+.menu__random.is-targeted {
+    color: var(--text-strong);
+    border-color: var(--accent);
+    border-style: solid;
+    background: var(--surface-2);
+}
+
+.menu__hint {
+    margin: 0;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+
+/* =========================================================
+   6. MODALE DE FIN DE PARTIE
+   ========================================================= */
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-modal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(16, 18, 20, 0.82);
+    backdrop-filter: blur(10px);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+.modal-overlay.visible { opacity: 1; }
+
+.modal-box {
+    width: min(420px, 88vw);
+    padding: 36px 32px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-l);
+    background: var(--surface-1);
+    box-shadow: var(--shadow);
+    text-align: center;
+    transform: translateY(12px);
+    transition: transform 0.3s cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+.modal-overlay.visible .modal-box { transform: translateY(0); }
+
+.modal-title {
+    margin: 0 0 6px;
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    color: var(--text-strong);
+}
+
+.modal-score {
+    margin-bottom: 28px;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.btn-modal {
+    height: 38px;
+    padding: 0 20px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.18s, color 0.18s, background 0.18s;
+}
+.btn-modal.is-targeted { border-color: var(--accent); color: var(--text-strong); }
+.btn-modal:hover { color: var(--text-strong); }
+#btn-retry:hover { border-color: var(--accent); color: var(--accent); }
+#btn-menu:hover { border-color: var(--danger); color: var(--danger); }
+
+
+/* =========================================================
+   7. CAPTURE : FLASH ET PELLICULE
+   ========================================================= */
+
+.capture-flash {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-modal) + 1);
+    background: #ffffff;
+    opacity: 0;
+    pointer-events: none;
+}
+.capture-flash.is-firing { animation: capture-flash 380ms ease-out; }
+
+@keyframes capture-flash {
+    0%   { opacity: 0.7; }
+    100% { opacity: 0; }
+}
+
+.gallery {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-modal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4vh 4vw;
+    background: rgba(16, 18, 20, 0.88);
+    backdrop-filter: blur(10px);
+    opacity: 0;
+    transition: opacity 0.22s ease;
+}
+.gallery.is-visible { opacity: 1; }
+
+.gallery__panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: min(940px, 100%);
+    max-height: 100%;
+}
+
+.gallery__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.gallery__title {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-strong);
+}
+
+.gallery__count {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.gallery__stage {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    background: var(--surface-1);
+    overflow: hidden;
+}
+
+.gallery__media {
+    max-width: 100%;
+    max-height: 58vh;
+    display: block;
+    object-fit: contain;
+}
+
+.gallery__strip {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+.gallery__thumb {
+    position: relative;
+    flex: 0 0 auto;
+    width: 104px;
+    height: 62px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    background: var(--surface-1);
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.18s, opacity 0.18s;
+    opacity: 0.65;
+}
+.gallery__thumb:hover,
+.gallery__thumb.is-targeted { opacity: 1; }
+.gallery__thumb.is-selected {
+    border-color: var(--accent);
+    opacity: 1;
+}
+
+.gallery__thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.gallery__badge {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(16, 18, 20, 0.85);
+    color: var(--text);
+    font-size: 0.64rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.gallery__actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+
+/* =========================================================
+   8. ÉLÉMENTS DE JEU (couche DOM)
+   ========================================================= */
+
+.game-item {
+    position: absolute;
+    top: -100px;
+    display: grid;
+    place-items: center;
+    line-height: 1;
+    will-change: transform;
+    animation: fall linear forwards;
+    filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.45));
+}
+
+@keyframes fall {
+    from { transform: translateY(0) rotate(0deg); }
+    to   { transform: translateY(115vh) rotate(240deg); }
+}
+
+.game-item.highlight { filter: drop-shadow(0 0 12px var(--accent)); }
+.game-item.popped { animation: pop 0.25s ease-out forwards; }
+
+@keyframes pop {
+    to { transform: scale(1.8); opacity: 0; }
+}
+
+.particle {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    will-change: transform, opacity;
+}
+
+
+/* =========================================================
+   9. MASQUE ÉCUREUIL (jeu NOISETTES)
+   ========================================================= */
+
+#squirrel-mask {
+    position: absolute;
+    top: 0; left: 0;
+    width: 120px;
+    height: 180px;
+    transform-origin: center center;
+    pointer-events: none;
+    will-change: transform;
+    opacity: 0.92;
+}
+
+.mask-head {
+    width: 100%;
+    height: 100%;
+    border-radius: 50% 50% 45% 45%;
+    background: radial-gradient(circle at 30% 30%, #d98b3f 10%, #8a5423 90%);
+    border: 2px solid rgba(0, 0, 0, 0.35);
+    position: relative;
+}
+
+/* Oreilles */
+.mask-head::before,
+.mask-head::after {
+    content: '';
+    position: absolute;
+    top: -22px;
+    width: 42px;
+    height: 52px;
+    border-radius: 50% 50% 20% 20%;
+    background: #8a5423;
+    border: 2px solid rgba(0, 0, 0, 0.3);
+    z-index: -1;
+}
+.mask-head::before { left: 4px; transform: rotate(-10deg); }
+.mask-head::after { right: 4px; transform: rotate(10deg); }
+
+.mask-eyes {
+    position: absolute;
+    top: 34%;
+    width: 100%;
+    display: flex;
+    justify-content: space-around;
+    padding: 0 14px;
+}
+
+.eye {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #10141a;
+    border: 2px solid rgba(255, 255, 255, 0.75);
+    position: relative;
+    transition: height 0.08s linear;
+}
+.eye::after {
+    content: '';
+    position: absolute;
+    top: 3px; left: 4px;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.9);
+}
+.eye.closed { height: 4px; border-radius: 4px; background: #10141a; }
+.eye.closed::after { display: none; }
+
+.mask-nose {
+    position: absolute;
+    top: 52%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 18px;
+    height: 13px;
+    border-radius: 50%;
+    background: #2b1a10;
+}
+
+.mask-mouth {
+    position: absolute;
+    top: 62%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 46px;
+    height: 10px;
+    border-radius: 0 0 24px 24px;
+    background: #3a2114;
+    overflow: hidden;
+    transition: height 0.06s linear;
+}
+.mask-mouth.ready-to-eat { outline: 2px solid rgba(143, 166, 184, 0.5); }
+
+.mask-teeth {
+    display: flex;
+    justify-content: center;
+    gap: 2px;
+    padding-top: 1px;
+}
+
+.tooth {
+    width: 9px;
+    height: 12px;
+    border-radius: 0 0 3px 3px;
+    background: #f4f6f8;
+}
+
+
+/* =========================================================
+   10. ACCESSIBILITÉ
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Petits écrans : le menu passe en colonne unique */
+@media (max-width: 720px) {
+    .menu { padding: 88px 16px 28px; gap: 16px; }
+    .menu__grid { grid-template-columns: 1fr; max-height: 58vh; }
+    .card__desc { display: none; }
+    .view-vignette { width: 160px; height: 120px; right: 14px; bottom: 14px; }
+}
+
+/* Écrans peu hauts : on récupère de la place sur le titre */
+@media (max-height: 700px) {
+    .menu { gap: 14px; padding-top: 84px; }
+    .menu__eyebrow { display: none; }
+    .menu__grid { max-height: 50vh; }
+}

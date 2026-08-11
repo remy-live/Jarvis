@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="description" content="JARVIS ARCADE : borne d'arcade jouable au corps et aux mains via la webcam.">
+    <title>JARVIS ARCADE | M3 CORE</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="style.css">
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "./js/vendor/three.module.js",
+            "@mediapipe/tasks-vision": "./js/vendor/vision_bundle.js"
+        }
+    }
+    </script>
+
+    <script defer src="./js/vendor/Howler.js"></script>
+</head>
+
+<body>
+    <!-- Flux webcam brut : invisible, sert uniquement d'entrée à MediaPipe -->
+    <video id="webcam-video" autoplay muted playsinline></video>
+
+    <div id="layer-game">
+        <div id="background-picture"></div>
+
+        <!-- Rendu 3D (Three.js) -->
+        <canvas id="three-canvas"></canvas>
+
+        <!-- Couche DOM/CSS (masque écureuil, menus HTML, particules...) -->
+        <div id="layer-2d"></div>
+
+        <!-- Rendu 2D (HUD, scores, jeux canvas) -->
+        <canvas id="ui-canvas"></canvas>
+
+        <!-- Retour caméra : vignette de debug ou fond plein écran -->
+        <canvas id="feedback-canvas"></canvas>
+    </div>
+
+    <div id="boot-screen">
+        <div class="boot-content">
+            <h1 class="glitch" data-text="J.A.R.V.I.S.">J.A.R.V.I.S.</h1>
+
+            <div class="loader-track">
+                <div id="loading-bar"></div>
+            </div>
+
+            <p id="status-text">INITIALISATION SYSTEME M3...</p>
+
+            <div id="boot-error" hidden>
+                <p id="boot-error-text"></p>
+                <button id="boot-continue" type="button">CONTINUER SANS CAMÉRA</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
