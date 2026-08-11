@@ -24,6 +24,21 @@ Puis ouvrez <http://localhost:8000> et autorisez la caméra.
 **Pas de caméra ou pas envie de lancer `setup` ?** Le jeu le détecte, l'annonce
 et bascule en mode souris/clavier. Tous les jeux restent jouables.
 
+### Mise en ligne (GitHub Pages ou autre hébergeur statique)
+
+Poussez le dépôt tel quel : il n'y a ni build ni dépendance à installer.
+
+Deux détails propres à Pages sont déjà réglés :
+
+- le fichier `.nojekyll` à la racine — sans lui, Jekyll masque les chemins
+  commençant par un tiret bas et renvoie des 404 ;
+- les modèles IA ne sont pas versionnés (≈ 15 Mo), donc absents en ligne : le
+  jeu les récupère alors **automatiquement sur le CDN MediaPipe**. La webcam
+  fonctionne donc aussi sur Pages, au prix d'un premier chargement plus long.
+
+Pour un fonctionnement 100 % hors ligne, passez `useCdnFallback` à `false`
+dans `js/core/Config.js` et retirez `assets/models/` du `.gitignore`.
+
 ---
 
 ## Les jeux
@@ -126,7 +141,7 @@ this.game.capture.openGallery();
 
 Deux étapes, pas une de plus.
 
-**1.** Copiez `js/games/_Template.js` sous un nouveau nom. Le fichier se termine
+**1.** Copiez `js/games/Template.js` sous un nouveau nom. Le fichier se termine
 par sa propre déclaration :
 
 ```js
@@ -172,7 +187,7 @@ export class MonJeu extends Game {
 | `this.game.audio` | Musique et bruitages |
 | `this.setup({...})` | Caméra + IA à activer |
 | `this.after(ms, fn)` | `setTimeout` annulé automatiquement à la sortie du jeu |
-| `js/games/_shared.js` | HUD tout prêt : score, message centré, jauge, particules |
+| `js/games/shared.js` | HUD tout prêt : score, message centré, jauge, particules |
 
 Un joueur a toujours cette forme :
 
@@ -249,7 +264,7 @@ js/
 │   ├── Header.js
 │   ├── GameOverModal.js
 │   └── CaptureGallery.js
-├── games/            un fichier par jeu + index.js, _Template.js, _shared.js
+├── games/            un fichier par jeu + index.js, Template.js, shared.js
 └── vendor/           Three.js, MediaPipe, Howler (non modifiés)
 assets/               modèles IA et sons (voir assets/README.md)
 scripts/              téléchargement des modèles, serveur de dev
@@ -279,7 +294,7 @@ accent des deux côtés suffit à reteinter l'ensemble.
 
 | Symptôme | Cause probable |
 | --- | --- |
-| « Modèles IA introuvables » | Lancez `npm run setup` |
+| « Modèles IA inaccessibles » | Lancez `npm run setup` (ou vérifiez l'accès au CDN MediaPipe) |
 | « Accès à la caméra refusé » | Autorisez la caméra dans la barre d'adresse |
 | « Caméra indisponible (HTTPS requis) » | Utilisez `npm start`, pas un double-clic sur le fichier |
 | Le curseur tremble | Montez `smoothing` dans `Config.js` (vers 1 = plus nerveux, vers 0 = plus lisse) |

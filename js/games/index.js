@@ -3,7 +3,7 @@
  *
  * === AJOUTER UN JEU EN 2 ÉTAPES ===
  *
- *   1. Copier `js/games/_Template.js` sous un nouveau nom.
+ *   1. Copier `js/games/Template.js` sous un nouveau nom.
  *   2. Ajouter son import dans la liste ci-dessous.
  *
  * C'est tout : le jeu se déclare lui-même (`registerGame({...})`) et

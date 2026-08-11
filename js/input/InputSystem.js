@@ -623,7 +623,7 @@ export class InputSystem {
     async initialize(onStatus = () => {}) {
         try {
             onStatus('CHARGEMENT DES MODÈLES IA...', 35);
-            await this._loadVisionModels();
+            await this._loadVisionModels(onStatus);
 
             onStatus('OUVERTURE DE LA CAMÉRA...', 65);
             await this._setupCamera();
@@ -654,9 +654,52 @@ export class InputSystem {
         this.feedbackCanvas.style.display = 'none';
     }
 
-    async _loadVisionModels() {
-        const { wasmPath, models, delegate, numHands, numPoses, numFaces } = CONFIG.vision;
-        const vision = await FilesetResolver.forVisionTasks(wasmPath);
+    /**
+     * Charge les trois détecteurs.
+     *
+     * On tente d'abord les fichiers locaux (`npm run setup`), puis, s'ils
+     * manquent, le CDN officiel MediaPipe : un déploiement statique où les
+     * modèles ne sont pas versionnés reste ainsi pleinement jouable.
+     */
+    async _loadVisionModels(onStatus = () => {}) {
+        const sources = [{ label: 'local', ...this._localSources() }];
+        if (CONFIG.vision.useCdnFallback) sources.push({ label: 'cdn', ...this._cdnSources() });
+
+        let lastError = null;
+
+        for (const source of sources) {
+            try {
+                if (source.label === 'cdn') {
+                    console.warn('⚠️ Modèles locaux absents, repli sur le CDN MediaPipe.');
+                    onStatus('MODÈLES IA : TÉLÉCHARGEMENT...', 45);
+                }
+                await this._createLandmarkers(source);
+                this.modelSource = source.label;
+                return;
+            } catch (error) {
+                lastError = error;
+            }
+        }
+
+        // MediaPipe rejette parfois avec un Event nu, illisible pour
+        // l'utilisateur : on renvoie une cause explicite.
+        throw Object.assign(new Error('MODELS_UNAVAILABLE'), { cause: lastError });
+    }
+
+    _localSources() {
+        return { wasm: CONFIG.vision.wasmPath, models: CONFIG.vision.models };
+    }
+
+    _cdnSources() {
+        return {
+            wasm: CONFIG.vision.cdn.wasm.replace('VERSION', CONFIG.vision.version),
+            models: CONFIG.vision.cdn.models
+        };
+    }
+
+    async _createLandmarkers({ wasm, models }) {
+        const { delegate, numHands, numPoses, numFaces } = CONFIG.vision;
+        const vision = await FilesetResolver.forVisionTasks(wasm);
 
         const [hand, pose, face] = await Promise.all([
             HandLandmarker.createFromOptions(vision, {
@@ -721,8 +764,8 @@ export class InputSystem {
         if (error?.name === 'NotFoundError') return "Aucune caméra détectée.";
         if (message.includes('CAMERA_UNSUPPORTED')) return "Caméra indisponible (le HTTPS ou localhost est requis).";
         if (message.includes('CAMERA_TIMEOUT')) return "La caméra n'a pas démarré à temps.";
-        if (/fetch|404|Failed to load|network/i.test(message)) {
-            return "Modèles IA introuvables — lancez `npm run setup` pour les télécharger.";
+        if (/fetch|404|Failed to load|network|MODELS_UNAVAILABLE/i.test(message)) {
+            return 'Modèles IA inaccessibles — lancez `npm run setup`, ou vérifiez votre connexion.';
         }
         return `Vision indisponible (${message}).`;
     }

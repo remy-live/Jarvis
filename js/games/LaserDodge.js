@@ -2,7 +2,7 @@ import { Game } from '../core/Game.js';
 import { registerGame } from '../core/GameRegistry.js';
 import { GameOverModal } from '../ui/GameOverModal.js';
 import { THEME, alpha, playerColor } from '../core/Theme.js';
-import { drawMessage, drawScoreBar, Particles } from './_shared.js';
+import { drawMessage, drawScoreBar, Particles } from './shared.js';
 
 const LIVES = 3;
 const TELEGRAPH = 1.1;     // secondes de visée avant le tir

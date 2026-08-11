@@ -2,7 +2,7 @@ import { Game } from '../core/Game.js';
 import { registerGame } from '../core/GameRegistry.js';
 import { GameOverModal } from '../ui/GameOverModal.js';
 import { THEME, alpha, playerColor } from '../core/Theme.js';
-import { pointerOf, drawMessage, drawScoreBar, drawGauge, Particles } from './_shared.js';
+import { pointerOf, drawMessage, drawScoreBar, drawGauge, Particles } from './shared.js';
 
 const HOLD_TIME = 0.45;    // temps de maintien sur une dalle pour la valider
 const FLASH_ON = 0.42;     // durée d'allumage pendant la démonstration

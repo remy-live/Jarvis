@@ -2,7 +2,7 @@ import { Game } from '../core/Game.js';
 import { registerGame } from '../core/GameRegistry.js';
 import { GameOverModal } from '../ui/GameOverModal.js';
 import { THEME, alpha } from '../core/Theme.js';
-import { palmOf, drawMessage, drawScoreBar, Particles, damp } from './_shared.js';
+import { palmOf, drawMessage, drawScoreBar, Particles, damp } from './shared.js';
 
 const WIN_SCORE = 7;
 const MALLET_RADIUS = 46;

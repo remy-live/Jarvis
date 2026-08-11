@@ -2,7 +2,7 @@ import { Game } from '../core/Game.js';
 import { registerGame } from '../core/GameRegistry.js';
 import { GameOverModal } from '../ui/GameOverModal.js';
 import { THEME, alpha, playerColor } from '../core/Theme.js';
-import { pointerOf, drawMessage, drawScoreBar, drawGauge, Particles } from './_shared.js';
+import { pointerOf, drawMessage, drawScoreBar, drawGauge, Particles } from './shared.js';
 
 const ROUND_TIME = 45;
 const COMBO_WINDOW = 1.6;   // secondes pour enchaîner sans perdre le combo
