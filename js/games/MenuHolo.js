@@ -236,6 +236,8 @@ registerGame({
     name: 'MENU PRINCIPAL',
     icon: '🏠',
     color: '#8fa6b8',
+    // Le menu suit deux personnes : c'est là qu'un second joueur rejoint
+    players: 2,
     isMenu: true,
     class: MenuHolo
 });

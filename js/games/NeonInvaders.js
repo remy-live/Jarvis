@@ -20,7 +20,8 @@ export class NeonInvaders extends Game {
 
     enter() {
         // CONFIG : Pose (Mouvement) + Hands (Super Laser)
-        this.gameConfig = { cameraMode: 'fullscreen', pose: true, face: false, hands: true };
+        // Tout vient de la pose, bras levés compris : pas besoin des mains
+        this.gameConfig = { cameraMode: 'fullscreen', pose: true, face: false, hands: false };
         this.setup(this.gameConfig);
         this.reset();
     }

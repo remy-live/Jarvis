@@ -36,11 +36,19 @@ export class Stats {
         if (!this.visible) return;
 
         const inputs = this.engine.inputs;
-        const lines = [
-            `${this.fps} FPS  ·  ${this._frameMs.toFixed(1)} ms/frame`,
-            `IA ${inputs.mode === 'vision' ? `${inputs.lastInferenceMs.toFixed(1)} ms` : 'souris'}`,
-            `mains ${inputs.enableHands ? 'on' : 'off'} · pose ${inputs.enablePose ? 'on' : 'off'} · visage ${inputs.enableFace ? 'on' : 'off'}`
-        ];
+        const lines = [`${this.fps} FPS  ·  ${this._frameMs.toFixed(1)} ms/frame`];
+
+        if (inputs.mode === 'vision') {
+            // Une analyse bloque la page pendant sa durée : c'est le premier
+            // chiffre à regarder quand ça saccade.
+            const cost = inputs.lastInferenceMs;
+            const rate = cost > 0 ? Math.min(1000 / Math.max(cost, 1), 1000 / inputs._detectionBudget) : 0;
+            lines.push(`analyse ${cost.toFixed(0)} ms  ·  ${rate.toFixed(1)}/s  ·  ${inputs.trackedPlayers} joueur(s)`);
+            lines.push(`mains ${inputs.enableHands ? 'on' : 'off'} · pose ${inputs.enablePose ? 'on' : 'off'} · visage ${inputs.enableFace ? 'on' : 'off'}`);
+            if (inputs.modelSource === 'cdn') lines.push('modèles : CDN (npm run setup pour les avoir en local)');
+        } else {
+            lines.push('IA désactivée · entrées souris / clavier');
+        }
 
         ctx.save();
         ctx.font = "500 12px ui-monospace, 'SFMono-Regular', Menlo, monospace";

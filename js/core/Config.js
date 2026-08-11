@@ -34,17 +34,32 @@ export const CONFIG = {
         // 'GPU' est beaucoup plus rapide, 'CPU' est le repli si WebGL fait défaut
         delegate: 'GPU',
 
-        // Nombre d'inférences par seconde. Le rendu reste à 60 fps :
+        // Nombre d'inférences par seconde. Le rendu vise 60 fps :
         // on réutilise simplement la dernière détection entre deux analyses.
         maxFps: 30,
 
-        numHands: 2,
-        numPoses: 2,
-        numFaces: 2,
+        // Part maximale du temps que l'IA a le droit de consommer.
+        // `detectForVideo` est SYNCHRONE : pendant qu'il tourne, plus rien
+        // ne s'affiche. Au-delà de cette part, on espace les analyses —
+        // mieux vaut un suivi un peu moins fréquent qu'un jeu qui saccade.
+        maxLoadRatio: 0.45,
+
+        // Un seul détecteur par cycle quand plusieurs sont actifs : ils
+        // s'alternent au lieu de bloquer la frame l'un après l'autre.
+        roundRobin: true,
+
+        // Nombre de personnes suivies. Déduit du jeu chargé (1 ou 2) :
+        // suivre deux mains coûte deux fois plus cher qu'une seule.
+        defaultPlayers: 1,
 
         // Résolution de l'image envoyée à l'IA (plus petit = plus rapide)
-        analysisWidth: 480,
-        analysisHeight: 360
+        analysisWidth: 384,
+        analysisHeight: 288,
+
+        // Largeur maximale du retour caméra dessiné à l'écran. Au-delà,
+        // on dessine plus petit et le CSS étire : invisible sur un décor
+        // atténué, mais bien moins de pixels à recopier chaque frame.
+        feedbackMaxWidth: 960
     },
 
     /* --- ENTRÉES --- */

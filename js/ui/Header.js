@@ -72,6 +72,7 @@ export class Header {
 
     setPlayerCount(count) {
         this.playerCount = count;
+        this.engine.inputs.setPlayerCount(count);
         this.dom.querySelectorAll('.switch-opt').forEach((opt) => {
             opt.classList.toggle('is-active', Number(opt.dataset.val) === count);
         });

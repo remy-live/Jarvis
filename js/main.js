@@ -96,4 +96,10 @@ class JarvisArcade {
     }
 }
 
-new JarvisArcade().init();
+const arcade = new JarvisArcade();
+
+// Poignée de débogage : `jarvis.engine`, `jarvis.inputs`, `jarvis.display`
+// depuis la console du navigateur. Aucun coût à l'exécution.
+window.jarvis = arcade;
+
+arcade.init();

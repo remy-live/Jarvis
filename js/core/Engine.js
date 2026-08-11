@@ -105,6 +105,10 @@ export class Engine {
             return;
         }
 
+        // Un jeu solo n'a pas besoin que l'IA cherche deux personnes :
+        // c'est presque deux fois moins de calcul par analyse.
+        this.inputs.setPlayerCount(GameClass.meta?.players ?? 2);
+
         try {
             const state = new GameClass(this);
             this.currentState = state;

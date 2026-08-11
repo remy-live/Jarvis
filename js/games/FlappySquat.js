@@ -44,7 +44,8 @@ export class FlappySquat extends Game {
         // --- LIBERTÉ TOTALE ---
         // pose: true  -> Pour l'oiseau (épaules)
         // hands: true -> Pour le curseur (index)
-        this.gameConfig = { cameraMode: 'fullscreen', pose: true, face: false, hands: true };
+        // Seule la pose sert à jouer : les mains ne reviennent que pour la modale
+        this.gameConfig = { cameraMode: 'fullscreen', pose: true, face: false, hands: false };
         this.setup(this.gameConfig);
         this.reset();
     }

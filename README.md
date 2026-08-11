@@ -217,22 +217,42 @@ Chaque détecteur inutile coûte environ 30 % de CPU pour rien.
 
 ## Performances
 
-Quelques garde-fous sont déjà en place :
+Le point critique tient en une phrase : **l'analyse d'image de MediaPipe est
+synchrone**. Tant qu'elle calcule, la page entière est figée — une analyse à
+40 ms, c'est deux frames perdues d'un coup. Tout le reste en découle.
 
-- l'IA n'analyse **jamais deux fois la même image** webcam
-  (`requestVideoFrameCallback`), et plafonne à 30 analyses par seconde ;
-- si une analyse traîne, le moteur **espace automatiquement** les inférences
-  pour garder un rendu fluide plutôt que saccadé ;
-- seuls les détecteurs demandés par le jeu courant tournent ;
-- l'image envoyée à l'IA est réduite (480 × 360, réglable) ;
-- le `dt` est borné : revenir sur l'onglet ne fait pas exploser la physique ;
-- l'onglet caché met la boucle en pause ;
-- positions des boutons, miroirs de landmarks et tampons sont réutilisés au
-  lieu d'être recalculés à chaque frame.
+Ce que fait le moteur pour tenir la cadence :
 
-Appuyez sur `F` pour voir FPS, temps par frame et coût de l'IA. Si ça rame :
-baissez `maxFps` ou `analysisWidth/Height` dans `js/core/Config.js`, ou passez
-`delegate` de `'GPU'` à `'CPU'` si le pilote graphique fait des siennes.
+- **une seule IA par cycle.** Quand un jeu a besoin du corps *et* des mains,
+  les détecteurs s'alternent au lieu de cumuler leurs coûts sur la même frame ;
+- **plafond de charge.** Si une analyse coûte cher, elle est espacée pour ne
+  consommer qu'environ 45 % du temps (`maxLoadRatio`) : mieux vaut un suivi un
+  peu moins fréquent qu'un jeu qui saccade ;
+- **on ne cherche qu'une personne dans un jeu solo.** Suivre deux mains fait
+  tourner le modèle deux fois ; le nombre de joueurs vient de la déclaration du
+  jeu, et le sélecteur du bandeau permet de forcer deux ;
+- **jamais deux fois la même image.** La webcam produit 30 images par seconde
+  pour un écran à 60 : l'analyse et le retour vidéo se calent dessus ;
+- **seuls les détecteurs demandés tournent** — chacun en trop coûte plein pot ;
+- image d'analyse réduite (384 × 288) et retour caméra dessiné en 960 px de
+  large, étiré par le CSS : invisible sur un décor atténué, deux fois moins de
+  pixels à recopier ;
+- `dt` borné, boucle en pause quand l'onglet est caché, positions des boutons
+  et tampons de landmarks réutilisés d'une frame à l'autre.
+
+### Diagnostiquer
+
+Appuyez sur `F`. La ligne « analyse » donne le coût d'une inférence et leur
+fréquence : c'est presque toujours là que part le temps.
+
+| Ce que vous voyez | Ce qu'il faut faire |
+| --- | --- |
+| Analyse > 50 ms | Baissez `analysisWidth/Height`, ou `delegate` sur `'CPU'` si le pilote GPU est capricieux |
+| FPS bas, analyse rapide | Le coût est ailleurs : baissez `feedbackMaxWidth` ou passez la caméra en `vignette` |
+| Suivi saccadé mais jeu fluide | Montez `maxLoadRatio` (l'IA aura plus de temps, le rendu moins) |
+| « modèles : CDN » affiché | Lancez `npm run setup` : en local, ils chargent bien plus vite |
+
+Tous ces réglages sont dans `js/core/Config.js`.
 
 ---
 

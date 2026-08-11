@@ -61,7 +61,11 @@ export class InputSystem {
         this._detectionBudget = 0;
         this._videoFrameSeen = false;
         this._hasFrameCallback = false;
+        this._detectorCursor = 0;
+        this._videoFrameId = 0;
+        this._drawnFrameId = -1;
         this.lastInferenceMs = 0;
+        this.trackedPlayers = CONFIG.vision.defaultPlayers;
 
         // Tampons réutilisés : le miroir des landmarks de pose était
         // recréé à chaque frame (33 objets × 2 joueurs × 60 fps).
@@ -165,9 +169,17 @@ export class InputSystem {
     resizeFeedbackCanvas() {
         const { clientWidth, clientHeight } = this.feedbackCanvas;
         if (!clientWidth || !clientHeight) return;
-        if (this.feedbackCanvas.width !== clientWidth || this.feedbackCanvas.height !== clientHeight) {
-            this.feedbackCanvas.width = clientWidth;
-            this.feedbackCanvas.height = clientHeight;
+
+        // Le retour caméra est un décor atténué : le dessiner en pleine
+        // résolution écran coûte cher pour rien. On plafonne sa largeur et
+        // on laisse le CSS l'étirer.
+        const scale = Math.min(1, CONFIG.vision.feedbackMaxWidth / clientWidth);
+        const width = Math.round(clientWidth * scale);
+        const height = Math.round(clientHeight * scale);
+
+        if (this.feedbackCanvas.width !== width || this.feedbackCanvas.height !== height) {
+            this.feedbackCanvas.width = width;
+            this.feedbackCanvas.height = height;
         }
     }
 
@@ -183,6 +195,29 @@ export class InputSystem {
         this.feedbackCanvas.style.display = 'block';
         this.feedbackCanvas.classList.add(mode === 'fullscreen' ? 'view-fullscreen' : 'view-vignette');
         this.resizeFeedbackCanvas();
+    }
+
+    /**
+     * Combien de personnes l'IA doit-elle suivre ?
+     *
+     * Suivre deux mains, c'est faire tourner le modèle deux fois. Un jeu
+     * solo n'en a pas besoin : on le dit aux détecteurs, ce qui divise
+     * presque par deux le coût de l'analyse.
+     */
+    setPlayerCount(count) {
+        const wanted = count >= 2 ? 2 : 1;
+        if (wanted === this.trackedPlayers) return;
+        this.trackedPlayers = wanted;
+
+        if (this.mode !== 'vision') return;
+
+        // setOptions est asynchrone : on ignore les erreurs éventuelles,
+        // le détecteur continue simplement avec son réglage précédent.
+        this.handLandmarker?.setOptions({ numHands: wanted }).catch(noop);
+        this.poseLandmarker?.setOptions({ numPoses: wanted }).catch(noop);
+        this.faceLandmarker?.setOptions({ numFaces: wanted }).catch(noop);
+
+        console.log(`⚙️ INPUTS: suivi de ${wanted} joueur(s)`);
     }
 
     /**
@@ -284,13 +319,25 @@ export class InputSystem {
 
     _updateFromVision(timestamp, display, dt, p1, p2) {
         const feedbackVisible = this.feedbackCanvas.style.display !== 'none';
-        if (feedbackVisible) this._drawCameraFeedback();
+
+        // Inutile de recopier la webcam tant qu'elle n'a pas produit une
+        // nouvelle image : à 30 fps caméra pour 60 fps d'écran, c'était une
+        // recopie plein écran sur deux jetée à la poubelle.
+        const freshFrame = !this._hasFrameCallback || this._videoFrameId !== this._drawnFrameId;
+        const draw = feedbackVisible && freshFrame;
+
+        if (draw) {
+            this._drawnFrameId = this._videoFrameId;
+            this._drawCameraFeedback();
+        }
 
         this._runDetectors(timestamp);
 
-        if (this.enablePose) this._applyPose(display, dt, p1, p2, feedbackVisible);
-        if (this.enableHands) this._applyHands(display, dt, p1, p2, feedbackVisible);
-        if (this.enableFace) this._applyFace(display, dt, p1, p2, feedbackVisible);
+        // `draw` seulement quand l'image vient d'être repeinte : sinon on
+        // empilait les mêmes tracés par-dessus eux-mêmes, frame après frame.
+        if (this.enablePose) this._applyPose(display, dt, p1, p2, draw);
+        if (this.enableHands) this._applyHands(display, dt, p1, p2, draw);
+        if (this.enableFace) this._applyFace(display, dt, p1, p2, draw);
     }
 
     _drawCameraFeedback() {
@@ -313,18 +360,24 @@ export class InputSystem {
     }
 
     /**
-     * Lance les détecteurs actifs.
+     * Lance UN détecteur par cycle.
      *
-     * Trois garde-fous, dans cet ordre :
-     *   1. la webcam tourne à ~30 fps, l'écran à 60 : inutile d'analyser
-     *      deux fois la même image (`_videoFrameSeen`) ;
+     * `detectForVideo` est synchrone : tant qu'il calcule, la page est
+     * figée. Trois garde-fous, dans cet ordre :
+     *   1. jamais deux fois la même image webcam (`_videoFrameSeen`) ;
      *   2. plafond `CONFIG.vision.maxFps` ;
-     *   3. si une analyse a duré trop longtemps, on lève le pied
-     *      automatiquement (`_detectionBudget`) au lieu de saccader.
+     *   3. plafond de charge : si une analyse coûte cher, on l'espace pour
+     *      qu'elle ne mange qu'une fraction du temps (`maxLoadRatio`).
+     *
+     * Quand plusieurs détecteurs sont actifs, ils s'alternent : chacun est
+     * un peu moins souvent à jour, mais aucune frame ne cumule leurs coûts.
      */
     _runDetectors(timestamp) {
         if (this.video.readyState < 2) return;
         if (this._hasFrameCallback && !this._videoFrameSeen) return;
+
+        const active = this._activeDetectors();
+        if (active.length === 0) return;
 
         const minInterval = Math.max(1000 / CONFIG.vision.maxFps, this._detectionBudget);
         if (timestamp - this._lastDetectionTime < minInterval) return;
@@ -343,26 +396,45 @@ export class InputSystem {
             this.analysisCanvas.width, this.analysisCanvas.height
         );
 
-        try {
-            this._results.pose = this.enablePose
-                ? this.poseLandmarker.detectForVideo(this.analysisCanvas, ts)
-                : null;
-            this._results.hand = this.enableHands
-                ? this.handLandmarker.detectForVideo(this.analysisCanvas, ts)
-                : null;
-            this._results.face = this.enableFace
-                ? this.faceLandmarker.detectForVideo(this.analysisCanvas, ts)
-                : null;
-        } catch (error) {
-            // Une frame ratée ne doit jamais tuer la boucle de jeu
-            console.warn('⚠️ Détection ignorée pour cette frame :', error);
+        const toRun = CONFIG.vision.roundRobin ? [this._nextDetector(active)] : active;
+
+        for (const kind of toRun) {
+            try {
+                this._results[kind] = this[`${kind}Landmarker`].detectForVideo(this.analysisCanvas, ts);
+            } catch (error) {
+                // Une frame ratée ne doit jamais tuer la boucle de jeu
+                console.warn(`⚠️ Détection "${kind}" ignorée pour cette frame :`, error);
+            }
         }
 
-        // Moyenne glissante du coût d'une analyse. Sur une machine lente,
-        // on espace les inférences pour garder un rendu fluide.
-        const elapsed = performance.now() - started;
+        this._recordCost(performance.now() - started);
+    }
+
+    _activeDetectors() {
+        const active = [];
+        if (this.enablePose) active.push('pose');
+        if (this.enableHands) active.push('hand');
+        if (this.enableFace) active.push('face');
+        return active;
+    }
+
+    /** Tourne entre les détecteurs actifs, un par cycle. */
+    _nextDetector(active) {
+        this._detectorCursor = (this._detectorCursor + 1) % active.length;
+        return active[this._detectorCursor];
+    }
+
+    /**
+     * Mémorise le coût d'une analyse et en déduit l'intervalle minimal
+     * pour que l'IA ne dépasse pas sa part du temps disponible.
+     */
+    _recordCost(elapsed) {
         this.lastInferenceMs = elapsed;
-        this._detectionBudget = this._detectionBudget * 0.9 + elapsed * 1.2 * 0.1;
+
+        // Pour que l'analyse ne consomme qu'une part `maxLoadRatio` du temps,
+        // il faut au moins `coût / part` millisecondes entre deux analyses.
+        const target = elapsed / Math.max(0.05, CONFIG.vision.maxLoadRatio);
+        this._detectionBudget = this._detectionBudget * 0.85 + target * 0.15;
     }
 
     /** Prévient dès qu'une nouvelle image webcam est disponible. */
@@ -372,6 +444,7 @@ export class InputSystem {
 
         const onFrame = () => {
             this._videoFrameSeen = true;
+            this._videoFrameId++;
             this.video.requestVideoFrameCallback(onFrame);
         };
         this.video.requestVideoFrameCallback(onFrame);
@@ -547,11 +620,9 @@ export class InputSystem {
     drawHand(landmarks, display) {
         const ctx = this.feedbackCtx;
         const canvas = this.feedbackCanvas;
-        ctx.strokeStyle = 'rgba(0, 255, 255, 0.9)';
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(230, 235, 240, 0.85)';
+        ctx.lineWidth = 2.5;
         ctx.lineCap = 'round';
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = '#00ffff';
 
         const chains = [[0, 1, 2, 3, 4], [0, 5, 6, 7, 8], [5, 9, 13, 17], [0, 17, 18, 19, 20], [9, 10, 11, 12], [13, 14, 15, 16]];
         for (const chain of chains) {
@@ -565,15 +636,13 @@ export class InputSystem {
             }
             ctx.stroke();
         }
-        ctx.shadowBlur = 0;
     }
 
     drawPose(landmarks, display) {
         const ctx = this.feedbackCtx;
         const canvas = this.feedbackCanvas;
-        ctx.strokeStyle = 'rgba(0, 255, 0, 0.5)';
-        ctx.lineWidth = 4;
-        ctx.shadowBlur = 0;
+        ctx.strokeStyle = 'rgba(180, 200, 215, 0.55)';
+        ctx.lineWidth = 3;
 
         const bones = [[11, 12], [11, 23], [12, 24], [23, 24], [11, 13], [13, 15], [12, 14], [14, 16]];
         ctx.beginPath();
@@ -590,12 +659,10 @@ export class InputSystem {
     drawFace(landmarks, display) {
         const ctx = this.feedbackCtx;
         const canvas = this.feedbackCanvas;
-        ctx.lineWidth = 1.5;
-        ctx.shadowBlur = 8;
+        ctx.lineWidth = 1.2;
 
         for (const zone of FACE_ZONES) {
             ctx.strokeStyle = zone.color;
-            ctx.shadowColor = zone.shadow;
             ctx.beginPath();
             for (const chain of zone.paths) {
                 for (let i = 0; i < chain.length; i++) {
@@ -608,7 +675,6 @@ export class InputSystem {
             }
             ctx.stroke();
         }
-        ctx.shadowBlur = 0;
         ctx.lineWidth = 1;
     }
 
@@ -698,7 +764,10 @@ export class InputSystem {
     }
 
     async _createLandmarkers({ wasm, models }) {
-        const { delegate, numHands, numPoses, numFaces } = CONFIG.vision;
+        const { delegate } = CONFIG.vision;
+        const numHands = this.trackedPlayers;
+        const numPoses = this.trackedPlayers;
+        const numFaces = this.trackedPlayers;
         const vision = await FilesetResolver.forVisionTasks(wasm);
 
         const [hand, pose, face] = await Promise.all([
@@ -771,26 +840,28 @@ export class InputSystem {
     }
 }
 
+const noop = () => {};
+
 /** Tracé du maillage facial pour la vignette de debug. */
 const FACE_ZONES = [
     {
-        color: 'rgba(0, 255, 255, 0.5)', shadow: '#00ffff',
+        color: 'rgba(200, 212, 222, 0.5)',
         paths: [[10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109, 10]]
     },
     {
-        color: 'rgba(255, 200, 0, 0.7)', shadow: '#ffcc00',
+        color: 'rgba(194, 168, 130, 0.55)',
         paths: [[70, 63, 105, 66, 107, 55, 65, 52, 53, 46], [336, 296, 334, 293, 300, 276, 283, 282, 295, 285]]
     },
     {
-        color: 'rgba(100, 200, 255, 0.8)', shadow: '#64c8ff',
+        color: 'rgba(143, 166, 184, 0.7)',
         paths: [[33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163, 7, 33], [263, 466, 388, 387, 386, 385, 384, 398, 362, 382, 381, 380, 374, 373, 390, 249, 263]]
     },
     {
-        color: 'rgba(255, 100, 255, 0.6)', shadow: '#ff64ff',
+        color: 'rgba(168, 188, 201, 0.45)',
         paths: [[168, 6, 197, 195, 5], [64, 98, 97, 2, 326, 327, 294]]
     },
     {
-        color: 'rgba(255, 50, 80, 0.7)', shadow: '#ff3250',
+        color: 'rgba(192, 138, 134, 0.6)',
         paths: [[61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 61], [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 78]]
     }
 ];
