@@ -2,6 +2,7 @@ import { HandLandmarker, PoseLandmarker, FaceLandmarker, FilesetResolver } from 
 import { CONFIG } from '../core/Config.js';
 import { FallbackInput } from './FallbackInput.js';
 import { VisionWorkerClient } from './VisionWorkerClient.js';
+import { Vec2Filter, OneEuroFilter, Hysteresis } from './filters.js';
 
 /**
  * SYSTÈME D'ENTRÉES
@@ -41,7 +42,6 @@ export class InputSystem {
 
         // --- CONFIGURATION & MÉMOIRE ---
         this.smoothing = CONFIG.input.smoothing;
-        this.previousStates = {};
         this.calibration = this.loadCalibration();
 
         // --- OPTION FANTÔME (touche G) : duplique le joueur 1 pour tester le 2 joueurs
@@ -69,6 +69,7 @@ export class InputSystem {
         this._videoFrameSeen = false;
         this._hasFrameCallback = false;
         this._detectorCursor = 0;
+        this.skippedFrames = 0;   // analyses évitées sur image identique
         this._videoFrameId = 0;
         this._drawnFrameId = -1;
 
@@ -84,6 +85,24 @@ export class InputSystem {
         // Tampons réutilisés : le miroir des landmarks de pose était
         // recréé à chaque frame (33 objets × 2 joueurs × 60 fps).
         this._mirrorBuffers = [[], []];
+
+        // Un filtre 1 € par joueur : stable à l'arrêt, sans retard en
+        // mouvement. Il fournit aussi la vitesse, que plusieurs jeux
+        // recalculaient chacun dans leur coin.
+        this._filters = [this._makeFilter(), this._makeFilter()];
+        this._zFilters = [new OneEuroFilter({ minCutoff: 0.8, beta: 0.01 }), new OneEuroFilter({ minCutoff: 0.8, beta: 0.01 })];
+        this._pinch = [
+            new Hysteresis(CONFIG.input.pinchOn, CONFIG.input.pinchOff),
+            new Hysteresis(CONFIG.input.pinchOn, CONFIG.input.pinchOff)
+        ];
+
+        // Dernière position connue de chaque joueur, par type de détection.
+        // C'est elle qui garantit la continuité d'identité.
+        this._anchors = {
+            pose: [emptyAnchor(), emptyAnchor()],
+            hand: [emptyAnchor(), emptyAnchor()],
+            face: [emptyAnchor(), emptyAnchor()]
+        };
 
         // Mémoire de détection : évite le clignotement quand l'IA rate une frame
         this._lostFrames = [0, 0];
@@ -115,6 +134,25 @@ export class InputSystem {
 
     setSmoothing(val) {
         this.smoothing = Math.max(0.01, Math.min(1.0, val));
+
+        // `smoothing` reste l'API des jeux ; on la traduit en fréquence de
+        // coupure au repos. Plus le jeu veut du nerf, plus on coupe haut.
+        const { minCutoffSlow, minCutoffFast } = CONFIG.input.filter;
+        const cutoff = minCutoffSlow + (minCutoffFast - minCutoffSlow) * this.smoothing;
+
+        for (const filter of this._filters) {
+            filter.x.minCutoff = cutoff;
+            filter.y.minCutoff = cutoff;
+        }
+    }
+
+    _makeFilter() {
+        const { beta, derivativeCutoff, minCutoffSlow, minCutoffFast } = CONFIG.input.filter;
+        return new Vec2Filter({
+            minCutoff: minCutoffSlow + (minCutoffFast - minCutoffSlow) * CONFIG.input.smoothing,
+            beta,
+            derivativeCutoff
+        });
     }
 
     saveCalibration(data) {
@@ -143,22 +181,18 @@ export class InputSystem {
     }
 
     /**
-     * Lissage exponentiel indépendant du framerate.
-     * `smoothing` = fraction rattrapée en 1/60 s (0 = mou, 1 = brut).
+     * Applique le filtre 1 € à la position principale d'un joueur et en
+     * déduit sa vitesse.
      */
-    _smoothValue(id, axis, targetVal, dt) {
-        if (!this.previousStates[id]) this.previousStates[id] = {};
-        const prev = this.previousStates[id][axis];
+    _place(target, x, y, dt) {
+        const filter = this._filters[target.id];
+        const point = filter.filter(x, y, dt);
 
-        if (prev === undefined || !Number.isFinite(prev)) {
-            this.previousStates[id][axis] = targetVal;
-            return targetVal;
-        }
-
-        const alpha = 1 - Math.pow(1 - this.smoothing, Math.max(dt, 0) * 60);
-        const next = prev + (targetVal - prev) * alpha;
-        this.previousStates[id][axis] = next;
-        return next;
+        target.x = point.x;
+        target.y = point.y;
+        target.velocity.x = filter.x.speed;
+        target.velocity.y = filter.y.speed;
+        target.velocity.speed = filter.speed;
     }
 
     /** Profondeur estimée à partir de la taille apparente de la main. */
@@ -243,9 +277,20 @@ export class InputSystem {
      * Chaque détecteur désactivé, c'est ~30 % de CPU en moins.
      */
     setActiveTrackers(config = {}) {
+        const changed = this.enableHands !== (config.hands !== false)
+            || this.enableFace !== (config.face === true)
+            || this.enablePose !== (config.pose === true);
+
         this.enableHands = config.hands !== false; // activé par défaut (curseur)
         this.enableFace = config.face === true;
         this.enablePose = config.pose === true;
+
+        // Les détecteurs changent : l'historique d'identité ne vaut plus rien
+        if (changed) {
+            this._forgetAnchors('pose');
+            this._forgetAnchors('hand');
+            this._forgetAnchors('face');
+        }
 
         this.workerClient?.setConfig({
             hands: this.enableHands,
@@ -295,6 +340,10 @@ export class InputSystem {
             type: 'none',
             isClicking: false,
 
+            // Vitesse lissée du point principal, en pixels par seconde.
+            // Plusieurs jeux la recalculaient à la main, mal.
+            velocity: { x: 0, y: 0, speed: 0 },
+
             // Compat historique
             indexTip: { x, y },
             handCenter: { x, y },
@@ -325,8 +374,7 @@ export class InputSystem {
 
             target.detected = true;
             target.type = 'virtual';
-            target.x = this._smoothValue(target.id, 'x', pos.x, dt);
-            target.y = this._smoothValue(target.id, 'y', pos.y, dt);
+            this._place(target, pos.x, pos.y, dt);
             target.isClicking = det.pinch;
 
             if (this.enablePose) {
@@ -481,7 +529,7 @@ export class InputSystem {
      * lui-même (une seule image en vol, les autres sont sautées).
      */
     _pumpWorker(timestamp) {
-        if (this.workerClient.busy || this._grabbingFrame) return;
+        if (this.workerClient.isBusy || this._grabbingFrame) return;
         if (timestamp - this._lastPumpTime < 1000 / CONFIG.vision.maxFps) return;
 
         this._lastPumpTime = timestamp;
@@ -490,19 +538,36 @@ export class InputSystem {
         const ts = Math.max(Math.round(timestamp), this._lastTimestamp + 1);
         this._lastTimestamp = ts;
 
-        // createImageBitmap est asynchrone et le transfert est zéro copie
+        // Le navigateur réduit l'image pendant le décodage : on transfère
+        // 384×288 au lieu de 1280×720, soit huit fois moins de pixels.
         this._grabbingFrame = true;
-        createImageBitmap(this.video).then(
+        createImageBitmap(this.video, {
+            resizeWidth: CONFIG.vision.analysisWidth,
+            resizeHeight: CONFIG.vision.analysisHeight,
+            resizeQuality: 'medium'
+        }).then(
             (bitmap) => {
                 this._grabbingFrame = false;
                 this.workerClient.sendFrame(bitmap, ts);
             },
-            () => { this._grabbingFrame = false; }
+            (error) => {
+                this._grabbingFrame = false;
+                // Sans ce message, une capture qui échoue arrête tout le
+                // suivi sans rien dire.
+                if (!this._bitmapWarned) {
+                    this._bitmapWarned = true;
+                    console.warn('⚠️ Capture d\'image impossible :', error);
+                }
+            }
         );
     }
 
     /** Résultat d'analyse renvoyé par le worker. */
-    _onWorkerResult({ kind, payload, ms }) {
+    _onWorkerResult({ kind, payload, ms, skipped }) {
+        if (skipped || !kind) {
+            if (skipped) this.skippedFrames++;
+            return;
+        }
         this._results[kind] = payload;
         this.versions[kind]++;
         this.lastInferenceMs = ms;
@@ -522,33 +587,93 @@ export class InputSystem {
         this.video.requestVideoFrameCallback(onFrame);
     }
 
-    /** Choisit le joueur 1 ou 2 selon la moitié d'écran occupée. */
-    _pickTarget(screenX, p1, p2) {
-        return screenX < 0.5 ? p1 : p2;
+    /**
+     * Rattache chaque détection à un joueur.
+     *
+     * Le découpage par moitié d'écran était simple mais fragile : deux
+     * personnes côte à côte, ou une seule qui traverse le milieu, et les
+     * curseurs s'échangeaient. On compare désormais chaque détection à la
+     * dernière position connue de chaque joueur, et on retient
+     * l'appariement globalement le plus proche.
+     *
+     * @param {'pose'|'hand'|'face'} kind
+     * @param {{x:number,y:number}[]} items - positions écran normalisées
+     * @returns {number[]} indice de joueur pour chaque détection
+     */
+    _assign(kind, items) {
+        const anchors = this._anchors[kind];
+        const cost = (item, player) => {
+            const anchor = anchors[player];
+            if (!anchor.active) {
+                // Aucun historique : on repart de la moitié d'écran, mais
+                // à un coût volontairement plus élevé qu'un suivi établi.
+                return CONFIG.input.reassignPenalty + Math.abs(item.x - (player === 0 ? 0.25 : 0.75));
+            }
+            return Math.hypot(item.x - anchor.x, item.y - anchor.y);
+        };
+
+        let assignment;
+        if (items.length === 1) {
+            assignment = [cost(items[0], 0) <= cost(items[0], 1) ? 0 : 1];
+        } else {
+            const straight = cost(items[0], 0) + cost(items[1], 1);
+            const crossed = cost(items[0], 1) + cost(items[1], 0);
+            assignment = straight <= crossed ? [0, 1] : [1, 0];
+        }
+
+        // Mémorisation pour la frame suivante
+        const seen = new Set(assignment);
+        assignment.forEach((player, i) => {
+            const anchor = anchors[player];
+            anchor.x = items[i].x;
+            anchor.y = items[i].y;
+            anchor.active = true;
+            anchor.misses = 0;
+        });
+        anchors.forEach((anchor, player) => {
+            if (seen.has(player)) return;
+            if (++anchor.misses > CONFIG.input.lostFramesTolerance) anchor.active = false;
+        });
+
+        return assignment;
+    }
+
+    /** Oublie l'historique d'identité d'un type de détection. */
+    _forgetAnchors(kind) {
+        for (const anchor of this._anchors[kind]) {
+            anchor.active = false;
+            anchor.misses = 0;
+        }
     }
 
     _applyPose(display, dt, p1, p2, draw) {
         const result = this._results.pose;
-        if (!result || !result.landmarks) return;
+        const landmarks = result?.landmarks;
+        if (!landmarks?.length) return;
 
-        for (const lm of result.landmarks) {
-            if (draw) this.drawPose(lm, display);
+        const targets = [p1, p2];
+        const items = [];
 
+        for (const lm of landmarks) {
             const nose = lm[0];
             if (!nose) continue;
+            if (draw) this.drawPose(lm, display);
+            items.push({ x: 1 - nose.x, y: nose.y, lm });
+        }
+        if (items.length === 0) return;
 
-            const screenXNormalized = 1 - nose.x;
-            const pos = display.toVirtual(screenXNormalized, nose.y);
-            const target = this._pickTarget(screenXNormalized, p1, p2);
+        this._assign('pose', items).forEach((playerId, i) => {
+            const target = targets[playerId];
+            const { x, y, lm } = items[i];
+            const pos = display.toVirtual(x, y);
 
             target.detected = true;
             target.type = 'pose';
-            target.x = this._smoothValue(target.id, 'x', pos.x, dt);
-            target.y = this._smoothValue(target.id, 'y', pos.y, dt);
+            this._place(target, pos.x, pos.y, dt);
 
             target.pose = { raw: lm };
-            target.poseLandmarks = this._mirror(target.id, lm);
-        }
+            target.poseLandmarks = this._mirror(playerId, lm);
+        });
     }
 
     /** Version miroir des landmarks, écrite dans un tampon réutilisé. */
@@ -568,25 +693,38 @@ export class InputSystem {
 
     _applyHands(display, dt, p1, p2, draw) {
         const result = this._results.hand;
-        if (!result || !result.landmarks) return;
+        const landmarks = result?.landmarks;
+        if (!landmarks?.length) return;
 
-        for (const lm of result.landmarks) {
-            if (draw) this.drawHand(lm, display);
+        const targets = [p1, p2];
+        const items = [];
 
+        for (const lm of landmarks) {
             const tip = lm[8];    // bout de l'index
             const wrist = lm[0];  // poignet
             const middle = lm[9]; // base du majeur
             const thumb = lm[4];  // pouce
             if (!tip || !wrist || !middle || !thumb) continue;
 
-            const screenXNormalized = 1 - tip.x;
-            const pos = display.toVirtual(screenXNormalized, tip.y);
+            if (draw) this.drawHand(lm, display);
+            items.push({
+                x: 1 - tip.x,
+                y: tip.y,
+                lm,
+                palmX: 1 - (wrist.x + middle.x) / 2,
+                palmY: (wrist.y + middle.y) / 2,
+                pinchDist: Math.hypot(thumb.x - tip.x, thumb.y - tip.y)
+            });
+        }
+        if (items.length === 0) return;
 
-            const palmPos = display.toVirtual(1 - (wrist.x + middle.x) / 2, (wrist.y + middle.y) / 2);
+        this._assign('hand', items).forEach((playerId, i) => {
+            const target = targets[playerId];
+            const item = items[i];
+
+            const pos = display.toVirtual(item.x, item.y);
+            const palmPos = display.toVirtual(item.palmX, item.palmY);
             const rawSize = Math.hypot(palmPos.x - pos.x, palmPos.y - pos.y);
-            const pinchDist = Math.hypot(thumb.x - tip.x, thumb.y - tip.y);
-
-            const target = this._pickTarget(screenXNormalized, p1, p2);
 
             // La pose (corps entier) reste prioritaire pour la position principale
             const poseOwnsPosition = target.type === 'pose';
@@ -595,50 +733,57 @@ export class InputSystem {
                 target.type = 'hand';
             }
 
-            if (!poseOwnsPosition) {
-                target.x = this._smoothValue(target.id, 'x', pos.x, dt);
-                target.y = this._smoothValue(target.id, 'y', pos.y, dt);
-            }
+            if (!poseOwnsPosition) this._place(target, pos.x, pos.y, dt);
 
-            target.z = this._smoothValue(target.id, 'z', this.getCalibratedZ(rawSize), dt);
-            target.isClicking = pinchDist < CONFIG.input.pinchThreshold;
+            target.z = this._zFilters[playerId].filter(this.getCalibratedZ(rawSize), dt);
+            target.isClicking = this._pinch[playerId].update(item.pinchDist);
 
-            target.hand = { raw: lm, x: pos.x, y: pos.y };
+            target.hand = { raw: item.lm, x: pos.x, y: pos.y, pinchDistance: item.pinchDist };
             target.indexTip = poseOwnsPosition ? { x: pos.x, y: pos.y } : { x: target.x, y: target.y };
             target.handCenter = palmPos;
             target.raw = { size: rawSize };
-        }
+        });
     }
 
     _applyFace(display, dt, p1, p2, draw) {
         const result = this._results.face;
-        if (!result || !result.faceLandmarks) return;
+        const landmarks = result?.faceLandmarks;
+        if (!landmarks?.length) return;
 
-        for (const lm of result.faceLandmarks) {
-            if (draw) this.drawFace(lm, display);
+        const targets = [p1, p2];
+        const items = [];
 
+        for (const lm of landmarks) {
             const nose = lm[1];
             const upperLip = lm[13];
             const lowerLip = lm[14];
             if (!nose || !upperLip || !lowerLip) continue;
 
-            const screenXNormalized = 1 - nose.x;
-            const pos = display.toVirtual(screenXNormalized, nose.y);
-            const mouthDist = Math.hypot(upperLip.x - lowerLip.x, upperLip.y - lowerLip.y);
-            const mouthOpen = mouthDist > CONFIG.input.mouthOpenThreshold;
+            if (draw) this.drawFace(lm, display);
+            items.push({
+                x: 1 - nose.x,
+                y: nose.y,
+                lm,
+                mouthDist: Math.hypot(upperLip.x - lowerLip.x, upperLip.y - lowerLip.y)
+            });
+        }
+        if (items.length === 0) return;
 
-            const target = this._pickTarget(screenXNormalized, p1, p2);
+        this._assign('face', items).forEach((playerId, i) => {
+            const target = targets[playerId];
+            const item = items[i];
+            const pos = display.toVirtual(item.x, item.y);
+            const mouthOpen = item.mouthDist > CONFIG.input.mouthOpenThreshold;
 
             if (!target.detected) {
                 target.detected = true;
                 target.type = 'face';
-                target.x = this._smoothValue(target.id, 'x', pos.x, dt);
-                target.y = this._smoothValue(target.id, 'y', pos.y, dt);
+                this._place(target, pos.x, pos.y, dt);
             }
 
-            target.face = { raw: lm, mouthOpen, nose: pos };
+            target.face = { raw: item.lm, mouthOpen, nose: pos };
             if (target.type === 'face') target.isClicking = mouthOpen;
-        }
+        });
     }
 
     // ---------- POST-TRAITEMENTS ----------
@@ -679,8 +824,13 @@ export class InputSystem {
                 this._lostFrames[i]++;
                 Object.assign(player, memory, { id: player.id, isClicking: false });
             } else {
+                // Joueur vraiment parti : on repart de zéro, sinon son
+                // prochain retour serait interpolé depuis une position
+                // périmée à l'autre bout de l'écran.
                 this._lastGoodPlayers[i] = null;
-                delete this.previousStates[i];
+                this._filters[i].reset();
+                this._zFilters[i].reset();
+                this._pinch[i].reset();
             }
         });
     }
@@ -853,6 +1003,8 @@ export class InputSystem {
 
         try {
             await this.workerClient.init({
+                staticThreshold: CONFIG.vision.staticThreshold,
+                staticMaxSkipMs: CONFIG.vision.staticMaxSkipMs,
                 wasm: absolute(wasm),
                 models: {
                     hand: absolute(models.hand),
@@ -966,6 +1118,9 @@ export class InputSystem {
 }
 
 const noop = () => {};
+
+/** Dernière position connue d'un joueur pour un type de détection. */
+const emptyAnchor = () => ({ x: 0.5, y: 0.5, active: false, misses: 0 });
 
 /** Tracé du maillage facial pour la vignette de debug. */
 const FACE_ZONES = [

@@ -6,11 +6,38 @@
  * si le worker est occupé, la frame est simplement sautée (un suivi en
  * retard d'une image vaut mieux qu'une file qui s'allonge).
  */
+// Une inférence lente (GPU logiciel, machine modeste) peut légitimement
+// durer plusieurs secondes. Le chien de garde ne doit se déclencher que
+// bien au-delà, sinon il renvoie une image pendant que le worker calcule
+// encore et empile le travail au lieu de le débloquer.
+const STUCK_TIMEOUT = 9000;
+const WARMUP_TIMEOUT = 45000; // première inférence : compilation des shaders
+
 export class VisionWorkerClient {
     constructor() {
         this.worker = null;
         this.busy = false;
+        this._sentAt = 0;
+        this._hadResult = false;
         this.onResult = null;
+    }
+
+    /**
+     * Une analyse est-elle en cours ?
+     *
+     * Chien de garde intégré : une image restée sans réponse finit par
+     * libérer le verrou. Sans lui, un worker coincé gèlerait le suivi
+     * pour toute la session.
+     */
+    get isBusy() {
+        // La toute première analyse compile les shaders et peut prendre
+        // bien plus longtemps que les suivantes : on ne la surveille pas.
+        const limit = this._hadResult ? STUCK_TIMEOUT : WARMUP_TIMEOUT;
+        if (this.busy && performance.now() - this._sentAt > limit) {
+            console.warn('⚠️ Analyse sans réponse, worker débloqué.');
+            this.busy = false;
+        }
+        return this.busy;
     }
 
     static get isSupported() {
@@ -70,9 +97,14 @@ export class VisionWorkerClient {
 
                 // Régime de croisière : chaque réponse libère le vol suivant
                 this.busy = false;
-                if (msg.type === 'results' && msg.kind && this.onResult) {
-                    this.onResult(msg);
+                this._hadResult = true;
+                // On transmet aussi les analyses sautées (kind null) :
+                // InputSystem les compte pour le diagnostic.
+                if (msg.type === 'frame-error' && !this._warned) {
+                    this._warned = true;
+                    console.warn('⚠️ Analyse en échec dans le worker :', msg.message);
                 }
+                if (msg.type === 'results' && this.onResult) this.onResult(msg);
             };
 
             this.worker.postMessage({ type: 'init', ...options });
@@ -89,11 +121,13 @@ export class VisionWorkerClient {
 
     /** @param {ImageBitmap} bitmap - transféré, donc zéro copie */
     sendFrame(bitmap, ts) {
-        if (!this.worker || this.busy) {
+        if (!this.worker || this.isBusy) {
             bitmap.close();
             return;
         }
+
         this.busy = true;
+        this._sentAt = performance.now();
         this.worker.postMessage({ type: 'frame', bitmap, ts }, [bitmap]);
     }
 

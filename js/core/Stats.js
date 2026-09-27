@@ -46,6 +46,7 @@ export class Stats {
             const where = inputs.backend === 'worker' ? 'worker' : 'thread principal';
             lines.push(`analyse ${cost.toFixed(0)} ms (${where})  ·  ${rate.toFixed(1)}/s  ·  ${inputs.trackedPlayers} joueur(s)`);
             lines.push(`mains ${inputs.enableHands ? 'on' : 'off'} · pose ${inputs.enablePose ? 'on' : 'off'} · visage ${inputs.enableFace ? 'on' : 'off'}`);
+            if (inputs.skippedFrames > 0) lines.push(`${inputs.skippedFrames} analyses évitées (image figée)`);
             if (inputs.modelSource === 'cdn') lines.push('modèles : CDN (npm run setup pour les avoir en local)');
         } else {
             lines.push('IA désactivée · entrées souris / clavier');

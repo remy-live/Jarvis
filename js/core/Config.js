@@ -56,6 +56,12 @@ export const CONFIG = {
         analysisWidth: 384,
         analysisHeight: 288,
 
+        // Image quasi identique à la précédente : inutile de la réanalyser.
+        // Différence moyenne (0-255) en dessous de laquelle on saute
+        // l'inférence, et délai maximal entre deux analyses forcées.
+        staticThreshold: 0.9,
+        staticMaxSkipMs: 500,
+
         // Largeur maximale du retour caméra dessiné à l'écran. Au-delà,
         // on dessine plus petit et le CSS étire : invisible sur un décor
         // atténué, mais bien moins de pixels à recopier chaque frame.
@@ -64,19 +70,39 @@ export const CONFIG = {
 
     /* --- ENTRÉES --- */
     input: {
-        // 0 = très lissé (mou), 1 = brut (nerveux). Indépendant du framerate.
+        // Réactivité du pointage. 0 = très lissé (mou), 1 = brut (nerveux).
+        // Traduit en réglage du filtre 1 € : le lissage s'adapte à la
+        // vitesse, donc plus besoin d'arbitrer entre tremblement et retard.
         smoothing: 0.75,
         menuSmoothing: 0.35,
 
-        // Distance pouce/index (normalisée) en dessous de laquelle on "pince"
-        pinchThreshold: 0.05,
+        filter: {
+            // Coupure au repos (Hz) aux deux extrémités de `smoothing`
+            minCutoffSlow: 0.6,
+            minCutoffFast: 3.2,
+            // Réactivité à la vitesse : plus haut = moins de retard
+            beta: 0.012,
+            derivativeCutoff: 1
+        },
+
+        // Pincement pouce/index, avec hystérésis : on ferme sous le premier
+        // seuil, on ne rouvre qu'au-dessus du second. Un seuil unique
+        // faisait clignoter l'état dix fois par seconde.
+        pinchOn: 0.045,
+        pinchOff: 0.072,
 
         // Ouverture de bouche (normalisée) considérée comme "ouverte"
         mouthOpenThreshold: 0.05,
 
         // Nombre de frames sans détection avant de déclarer le joueur absent.
         // Évite que le curseur disparaisse au moindre raté de l'IA.
-        lostFramesTolerance: 6
+        lostFramesTolerance: 6,
+
+        // Continuité d'identité : une détection est rattachée au joueur dont
+        // la dernière position est la plus proche, plutôt qu'à la moitié
+        // d'écran qu'elle occupe. Deux joueurs qui se croisent ne
+        // s'échangent plus leurs curseurs.
+        reassignPenalty: 0.55
     },
 
     /* --- MOTEUR --- */
