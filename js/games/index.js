@@ -25,11 +25,13 @@ import './FruitBlade.js';
 import './NeonBrickBattle.js';
 
 // --- Corps entier ---
+import './RedLight.js';
 import './LaserDodge.js';
 import './NeonInvaders.js';
 import './FlappySquat.js';
 
 // --- Réflexion et visage ---
+import './GrimaceRush.js';
 import './MemoryPads.js';
 import './ShurikenShowdown.js';
 import './NutsGame.js';

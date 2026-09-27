@@ -102,6 +102,7 @@ export class CaptureGallery {
 
     _render() {
         const stage = this.dom.querySelector('.gallery__stage');
+        stage.classList.toggle('has-caption', Boolean(this.selected?.label));
         const strip = this.dom.querySelector('.gallery__strip');
         const count = this.dom.querySelector('.gallery__count');
 
@@ -111,6 +112,12 @@ export class CaptureGallery {
         stage.innerHTML = '';
         if (this.selected) {
             stage.appendChild(this._buildStageMedia(this.selected));
+            if (this.selected.label) {
+                const caption = document.createElement('p');
+                caption.className = 'gallery__caption';
+                caption.textContent = this.selected.label;
+                stage.appendChild(caption);
+            }
         }
 
         // Bande de vignettes (masquée s'il n'y a qu'un élément)

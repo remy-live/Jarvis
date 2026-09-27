@@ -46,6 +46,13 @@ export const scrim = (alpha = 0.55) => `rgba(16, 18, 20, ${alpha})`;
  * Évite d'écrire des `rgba()` en dur dans chaque jeu.
  */
 export function alpha(hex, value) {
+    // Une couleur inconnue ne doit pas interrompre le rendu d'un jeu :
+    // on retombe sur le texte du thème plutôt que de lever une exception.
+    if (typeof hex !== 'string' || !/^#[0-9a-f]{6}$/i.test(hex)) {
+        console.warn('⚠️ THEME: couleur invalide, remplacée :', hex);
+        hex = THEME.text;
+    }
+
     const int = parseInt(hex.slice(1), 16);
     const r = (int >> 16) & 255;
     const g = (int >> 8) & 255;

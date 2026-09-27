@@ -34,10 +34,14 @@ function setPoint(list, index, x, y, z = 0) {
 export class FallbackInput {
     constructor() {
         // Position écran normalisée (0..1) de chaque joueur virtuel
-        this.slots = [
-            { active: true, x: 0.5, y: 0.5, pinch: false, handsUp: false, mouthOpen: false },
-            { active: false, x: 0.75, y: 0.5, pinch: false, handsUp: false, mouthOpen: false }
-        ];
+        const slot = (active, x) => ({
+            active, x, y: 0.5,
+            pinch: false, handsUp: false,
+            // Expressions du visage de synthèse, pilotées au clavier
+            mouthOpen: false, eyesShut: false, wink: false,
+            brows: false, smile: false, roll: 0
+        });
+        this.slots = [slot(true, 0.5), slot(false, 0.75)];
 
         // Buffers de landmarks (un jeu par joueur)
         this.buffers = this.slots.map(() => ({
@@ -109,10 +113,15 @@ export class FallbackInput {
     sample(dt) {
         const k = this.keys;
 
-        // Joueur 1 : souris
+        // Joueur 1 : souris, plus les expressions au clavier
         const p1 = this.slots[0];
         p1.handsUp = k.has('Space');
         p1.mouthOpen = k.has('KeyE');
+        p1.eyesShut = k.has('KeyA');
+        p1.wink = k.has('KeyZ');
+        p1.brows = k.has('KeyS');
+        p1.smile = k.has('KeyX');
+        p1.roll = (k.has('KeyQ') ? 26 : 0) + (k.has('KeyD') ? -26 : 0);
 
         // Joueur 2 : flèches
         const p2 = this.slots[1];
@@ -127,6 +136,11 @@ export class FallbackInput {
             p2.pinch = k.has('Enter');
             p2.handsUp = k.has('ShiftRight');
             p2.mouthOpen = k.has('Numpad0');
+            p2.eyesShut = k.has('Numpad1');
+            p2.wink = k.has('Numpad2');
+            p2.brows = k.has('Numpad3');
+            p2.smile = k.has('Numpad4');
+            p2.roll = (k.has('Numpad7') ? 26 : 0) + (k.has('Numpad9') ? -26 : 0);
         }
 
         return this.slots.map((slot, i) => this._buildDetection(slot, this.buffers[i]));
@@ -158,18 +172,44 @@ export class FallbackInput {
         setPoint(pose, 27, cx + 0.07, cy + 0.82);
         setPoint(pose, 28, cx - 0.07, cy + 0.82);
 
-        /* --- VISAGE (uniquement les points réellement lus par les jeux) --- */
+        /* --- VISAGE ---
+           Les points sont posés dans un repère local (origine au nez),
+           puis tournés selon l'inclinaison : ainsi le front, le menton et
+           les yeux basculent ensemble, comme une vraie tête penchée. */
         const face = buf.face;
-        setPoint(face, 1, cx, cy);            // bout du nez
-        setPoint(face, 10, cx, cy - 0.11);    // haut du front
-        setPoint(face, 152, cx, cy + 0.11);   // menton
+        const angle = (slot.roll || 0) * Math.PI / 180;
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const place = (index, lx, ly) => setPoint(face, index, cx + lx * cos - ly * sin, cy + lx * sin + ly * cos);
+
+        place(1, 0, 0);          // bout du nez
+        place(10, 0, -0.11);     // haut du front
+        place(152, 0, 0.11);     // menton
+
         const mouthGap = slot.mouthOpen ? 0.06 : 0.004;
-        setPoint(face, 13, cx, cy + 0.05);                // lèvre supérieure
-        setPoint(face, 14, cx, cy + 0.05 + mouthGap);     // lèvre inférieure
-        setPoint(face, 159, cx + 0.04, cy - 0.045);       // œil droit (haut)
-        setPoint(face, 145, cx + 0.04, cy - 0.020);       // œil droit (bas)
-        setPoint(face, 386, cx - 0.04, cy - 0.045);       // œil gauche (haut)
-        setPoint(face, 374, cx - 0.04, cy - 0.020);       // œil gauche (bas)
+        place(13, 0, 0.05);
+        place(14, 0, 0.05 + mouthGap);
+
+        // Coins de la bouche : ils s'écartent quand on sourit
+        const mouthWidth = slot.smile ? 0.062 : 0.045;
+        place(61, -mouthWidth, 0.05);
+        place(291, mouthWidth, 0.05);
+
+        // Paupières : fermées = fente, clin d'œil = un seul côté
+        const rightShut = slot.eyesShut || slot.wink;
+        const leftShut = slot.eyesShut;
+        const rightGap = rightShut ? 0.003 : 0.025;
+        const leftGap = leftShut ? 0.003 : 0.025;
+
+        place(159, 0.04, -0.0325 - rightGap / 2);   // œil droit (haut)
+        place(145, 0.04, -0.0325 + rightGap / 2);   // œil droit (bas)
+        place(386, -0.04, -0.0325 - leftGap / 2);   // œil gauche (haut)
+        place(374, -0.04, -0.0325 + leftGap / 2);   // œil gauche (bas)
+
+        // Sourcils : ils montent quand on les lève
+        const browLift = slot.brows ? 0.03 : 0.016;
+        place(105, 0.04, -0.045 - browLift);
+        place(334, -0.04, -0.045 - browLift);
 
         /* --- MAIN --- */
         const hand = buf.hand;
@@ -184,6 +224,7 @@ export class FallbackInput {
             screenX: slot.x,
             screenY: slot.y,
             pinch: slot.pinch,
+            mouthOpen: slot.mouthOpen,
             pose,
             face,
             hand

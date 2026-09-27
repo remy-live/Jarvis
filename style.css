@@ -748,8 +748,16 @@ h1.glitch {
 }
 .capture-flash.is-firing { animation: capture-flash 380ms ease-out; }
 
+/* Photo prise pendant une partie : on signale sans éblouir le joueur */
+.capture-flash.is-discreet { animation: capture-flash-soft 260ms ease-out; }
+
 @keyframes capture-flash {
     0%   { opacity: 0.7; }
+    100% { opacity: 0; }
+}
+
+@keyframes capture-flash-soft {
+    0%   { opacity: 0.22; }
     100% { opacity: 0; }
 }
 
@@ -806,6 +814,18 @@ h1.glitch {
     border-radius: var(--radius-m);
     background: var(--surface-1);
     overflow: hidden;
+}
+
+.gallery__stage.has-caption { flex-direction: column; gap: 0; }
+
+.gallery__caption {
+    width: 100%;
+    margin: 0;
+    padding: 10px 16px;
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 0.82rem;
+    text-align: center;
 }
 
 .gallery__media {

@@ -1,7 +1,7 @@
 # 🕹️ JARVIS ARCADE
 
 Une borne d'arcade qui se joue **avec le corps** : la webcam suit vos mains,
-votre silhouette et votre visage, et pilote douze mini-jeux. Aucune manette,
+votre silhouette et votre visage, et pilote quatorze mini-jeux. Aucune manette,
 aucun compte, aucune donnée qui sort du navigateur — tout tourne en local.
 
 Fonctionne aussi **à la souris**, sans caméra ni modèles installés.
@@ -45,6 +45,8 @@ dans `js/core/Config.js` et retirez `assets/models/` du `.gitignore`.
 
 | Jeu | Seul | À deux | Ce qu'on fait |
 | --- | :---: | :---: | --- |
+| **1·2·3 Soleil** | ✓ | ✓ | Avancer au vert, se figer au rouge — sinon, photo souvenir |
+| **Grimaces** | ✓ | ✓ | Enchaîner les têtes demandées, chacune est photographiée |
 | **Fil électrique** | ✓ | ✓ | Suivre un couloir du doigt sans toucher les bords |
 | **Corde & bille** | ✓ | ✓ | Une bille en équilibre sur une ficelle tendue entre les mains |
 | **Air Hockey** | ✓ (contre la machine) | ✓ | La main est le maillet, premier à sept buts |
@@ -61,6 +63,13 @@ dans `js/core/Config.js` et retirez `assets/models/` du `.gitignore`.
 Le menu filtre entre **Tous**, **Seul** et **À deux** ; le bouton *Au hasard*
 choisit pour vous. À la souris, les flèches déplacent la sélection et `Entrée`
 lance la partie.
+
+**1·2·3 Soleil** et **Grimaces** se servent de l'appareil photo comme d'un
+ressort de jeu : la borne déclenche toute seule au bon moment — le joueur pris
+en train de bouger au rouge, la grimace réussie — et la pellicule s'ouvre à la
+fin de la manche sur tous les clichés. **Grimaces** pose aussi un masque qui
+suit le visage (renard, pirate, robot, lunettes) : touche `N` pour en changer
+ou l'enlever.
 
 **Fil électrique** vous donne un tracé qui se resserre à chaque réussite ; à
 deux, chacun sa moitié d'écran et le même parcours, c'est une course.
@@ -106,6 +115,7 @@ la gauche). Sans caméra, la touche `P` active un joueur 2 au clavier. La touche
 | `Espace` | Lever les bras |
 | `E` | Ouvrir la bouche |
 | `P` | Activer le joueur 2 (flèches, `Entrée` = pincer, `Maj droite` = bras levés) |
+| `A` `Z` `S` `X` `Q`/`D` | Grimaces : yeux fermés, clin d'œil, sourcils, sourire, pencher la tête |
 
 En mode souris, le pointeur du système suffit : le curseur virtuel et sa
 validation par survol sont désactivés pour le joueur 1 (sinon un simple arrêt
@@ -138,11 +148,15 @@ téléchargiez.
 Depuis un jeu :
 
 ```js
-this.game.capture.photo();            // avec compte à rebours
-this.game.capture.photo(0);           // immédiat
-this.game.capture.toggleRecording();  // vidéo
-this.game.capture.openGallery();
+this.game.capture.photo();                 // avec compte à rebours
+this.game.capture.snap('Belle grimace !'); // instantané et discret, en pleine partie
+this.game.capture.toggleRecording();       // vidéo
+this.game.capture.openGallery();           // la pellicule, en fin de manche
 ```
+
+`snap()` est fait pour photographier l'action : pas de compte à rebours, un
+éclair à peine visible, et la pellicule ne s'ouvre pas au milieu du jeu. La
+légende passée s'affiche sous la photo dans la pellicule.
 
 ---
 
@@ -197,6 +211,8 @@ export class MonJeu extends Game {
 | `this.setup({...})` | Caméra + IA à activer |
 | `this.after(ms, fn)` | `setTimeout` annulé automatiquement à la sortie du jeu |
 | `js/games/shared.js` | HUD tout prêt : score, message centré, jauge, particules |
+| `js/games/faceMask.js` | Masques qui suivent le visage (renard, pirate, robot, lunettes) |
+| `this.game.inputs.versions` | Compteur d'analyses, pour savoir si les points sont neufs |
 
 Un joueur a toujours cette forme :
 

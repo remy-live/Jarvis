@@ -57,6 +57,12 @@ export class InputSystem {
         this._lastFrameTime = 0;
         this._results = { hand: null, pose: null, face: null };
 
+        // Incrémenté à chaque nouvelle analyse. Les jeux qui mesurent un
+        // MOUVEMENT en ont besoin : l'IA tourne moins vite que l'écran, et
+        // en mode souris les tableaux de points sont recyclés — impossible
+        // de deviner la fraîcheur des données autrement.
+        this.versions = { hand: 0, pose: 0, face: 0 };
+
         // Auto-régulation : coût moyen d'une analyse, et détection des
         // nouvelles images webcam pour ne jamais analyser deux fois la même.
         this._detectionBudget = 0;
@@ -307,6 +313,11 @@ export class InputSystem {
         const detections = this.fallback.sample(dt);
         const targets = [p1, p2];
 
+        // Le clavier et la souris produisent des données neuves chaque frame
+        if (this.enableHands) this.versions.hand++;
+        if (this.enablePose) this.versions.pose++;
+        if (this.enableFace) this.versions.face++;
+
         detections.forEach((det, i) => {
             if (!det.active) return;
             const target = targets[i];
@@ -425,6 +436,7 @@ export class InputSystem {
         for (const kind of toRun) {
             try {
                 this._results[kind] = this[`${kind}Landmarker`].detectForVideo(this.analysisCanvas, ts);
+                this.versions[kind]++;
             } catch (error) {
                 // Une frame ratée ne doit jamais tuer la boucle de jeu
                 console.warn(`⚠️ Détection "${kind}" ignorée pour cette frame :`, error);
@@ -492,6 +504,7 @@ export class InputSystem {
     /** Résultat d'analyse renvoyé par le worker. */
     _onWorkerResult({ kind, payload, ms }) {
         this._results[kind] = payload;
+        this.versions[kind]++;
         this.lastInferenceMs = ms;
         this._lastDetectionTime = performance.now();
     }

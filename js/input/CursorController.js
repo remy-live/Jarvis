@@ -29,16 +29,13 @@ export class CursorController {
 
         // Le DOM cliquable ne bouge qu'aux changements de scène : inutile
         // de le requêter — et de mesurer ses positions — à chaque frame.
-        this._elements = [];
+        this._elements = new Set();
         this._elementsDirty = true;
-        this._rects = [];
-        this._rectsTime = 0;
     }
 
     /** À appeler dès que des éléments cliquables apparaissent ou disparaissent. */
     invalidate() {
         this._elementsDirty = true;
-        this._rectsTime = 0;
     }
 
     update() {
@@ -66,7 +63,7 @@ export class CursorController {
             cursor.el.style.display = 'block';
             cursor.el.style.transform = `translate3d(${player.x}px, ${player.y}px, 0)`;
 
-            const hovered = this._hitTest(player, now);
+            const hovered = this._hitTest(player);
             if (!hovered) {
                 this._reset(cursor);
                 continue;
@@ -98,33 +95,31 @@ export class CursorController {
 
     // ----------------------------------------------------------
 
-    _hitTest(player, now) {
-        let hovered = null;
-        for (const { el, rect } of this._getRects(now)) {
-            if (player.x >= rect.left && player.x <= rect.right &&
-                player.y >= rect.top && player.y <= rect.bottom) {
-                hovered = el; // le dernier gagne : c'est le plus haut dans le DOM
-            }
+    /**
+     * On demande au navigateur ce qui se trouve vraiment sous le curseur,
+     * puis on remonte jusqu'au premier élément cliquable.
+     *
+     * Comparer des rectangles ignorait l'empilement : le curseur pouvait
+     * viser un bouton caché derrière une surcouche (la pellicule ouverte
+     * par-dessus la modale de fin de partie, par exemple).
+     */
+    _hitTest(player) {
+        const top = document.elementFromPoint(player.x, player.y);
+        if (!top) return null;
+
+        const interactive = this._getElements();
+        for (let node = top; node && node !== document.body; node = node.parentElement) {
+            if (interactive.has(node)) return node;
         }
-        return hovered;
+        return null;
     }
 
     _getElements() {
         if (this._elementsDirty) {
-            this._elements = Array.from(document.querySelectorAll(INTERACTIVE_SELECTOR));
+            this._elements = new Set(document.querySelectorAll(INTERACTIVE_SELECTOR));
             this._elementsDirty = false;
         }
         return this._elements;
-    }
-
-    _getRects(now) {
-        if (now - this._rectsTime > RECT_REFRESH_MS) {
-            this._rectsTime = now;
-            this._rects = this._getElements()
-                .filter((el) => el.isConnected && el.offsetParent !== null)
-                .map((el) => ({ el, rect: el.getBoundingClientRect() }));
-        }
-        return this._rects;
     }
 
     _getCursor(id) {
@@ -178,8 +173,5 @@ export class CursorController {
 
 /** Circonférence de l'anneau de progression (r = 22). */
 const RING_LENGTH = 138;
-
-/** Positions rafraîchies 4 fois par seconde : largement assez, et bien moins cher. */
-const RECT_REFRESH_MS = 250;
 
 const INTERACTIVE_SELECTOR = '#ui-header button, #ui-header .switch-opt, .interactive';

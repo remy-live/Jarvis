@@ -14,7 +14,7 @@ import { CaptureGallery } from '../ui/CaptureGallery.js';
  * Déclenchement :
  *   - bandeau : boutons 📷 et ⏺
  *   - clavier : C (photo), R (vidéo), G (pellicule)
- *   - depuis un jeu : engine.capture.photo() / .toggleRecording()
+ *   - depuis un jeu : engine.capture.photo() / .snap('légende') / .toggleRecording()
  */
 export class CaptureStudio {
     /** @param {import('../core/Engine.js').Engine} engine */
@@ -33,7 +33,8 @@ export class CaptureStudio {
         this._nextId = 1;
 
         this.countdown = 0;
-        this._photoPending = false;
+        this._request = null;   // { silent, label } quand une photo est demandée
+        this.toast = 0;         // petite confirmation à l'écran
         this.flash = this._createFlash();
     }
 
@@ -45,11 +46,23 @@ export class CaptureStudio {
     //  ACTIONS
     // ==========================================================
 
-    /** Photo avec compte à rebours (0 = immédiat). */
+    /** Photo avec compte à rebours (0 = immédiat), puis ouverture de la pellicule. */
     photo(delaySeconds = CONFIG.capture.countdown) {
-        if (this.countdown > 0 || this._photoPending) return;
+        if (this.countdown > 0 || this._request) return;
         if (delaySeconds > 0) this.countdown = delaySeconds;
-        else this._photoPending = true;
+        else this._request = { silent: false, label: '' };
+    }
+
+    /**
+     * Prise de vue instantanée et discrète, pour les jeux qui
+     * photographient l'action : ni compte à rebours, ni pellicule qui
+     * s'ouvre en pleine partie. Juste un éclair bref et un petit repère.
+     *
+     * @param {string} [label] - légende affichée dans la pellicule
+     */
+    snap(label = '') {
+        if (this._request) return;
+        this._request = { silent: true, label };
     }
 
     /** Démarre ou arrête l'enregistrement vidéo. */
@@ -102,6 +115,7 @@ export class CaptureStudio {
     // ==========================================================
 
     update(dt) {
+        if (this.toast > 0) this.toast = Math.max(0, this.toast - dt);
         if (this.countdown <= 0) return;
 
         const before = Math.ceil(this.countdown);
@@ -109,7 +123,7 @@ export class CaptureStudio {
         const after = Math.ceil(this.countdown);
 
         if (after !== before && after > 0) this.engine.playSound('hover');
-        if (this.countdown === 0) this._photoPending = true;
+        if (this.countdown === 0) this._request = { silent: false, label: '' };
     }
 
     /**
@@ -118,26 +132,31 @@ export class CaptureStudio {
      * que le navigateur ne vide le buffer WebGL.
      */
     composeFrame() {
-        const wantsPhoto = this._photoPending;
-        if (!wantsPhoto && !this.recorder.isRecording) return;
+        const request = this._request;
+        if (!request && !this.recorder.isRecording) return;
 
-        if (this.recorder.isRecording && !wantsPhoto) {
+        if (!request) {
             this.composer.resize(CONFIG.capture.videoPixelRatio);
             this.composer.draw();
             return;
         }
 
         // Photo : on monte en résolution le temps d'une frame
-        this._photoPending = false;
+        this._request = null;
         this.composer.resize(CONFIG.capture.photoPixelRatio);
         const canvas = this.composer.draw();
         const url = canvas.toDataURL('image/png');
 
-        const item = this._addItem({ type: 'photo', url, poster: url, extension: 'png' });
+        const item = this._addItem({
+            type: 'photo', url, poster: url, extension: 'png', label: request.label
+        });
 
-        this._fireFlash();
+        this._fireFlash(request.silent);
         this.engine.playSound('select');
-        this.gallery.open(this.items, item);
+
+        // En pleine partie, ouvrir la pellicule couperait le jeu net
+        if (request.silent) this.toast = 1.1;
+        else this.gallery.open(this.items, item);
 
         // On redonne au canvas sa taille vidéo si un clip tourne
         if (this.recorder.isRecording) this.composer.resize(CONFIG.capture.videoPixelRatio);
@@ -147,6 +166,38 @@ export class CaptureStudio {
     renderOverlay(ctx, width, height) {
         if (this.countdown > 0) this._renderCountdown(ctx, width, height);
         if (this.recorder.isRecording) this._renderRecordingBadge(ctx, width);
+        if (this.toast > 0) this._renderToast(ctx, width, height);
+    }
+
+    /** « Photo prise » : discret, le jeu continue. */
+    _renderToast(ctx, width, height) {
+        const fade = Math.min(1, this.toast / 0.3);
+        const count = this.items.length;
+
+        ctx.save();
+        ctx.globalAlpha = fade;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        const label = `PHOTO · ${count}`;
+        ctx.font = `500 12px ${THEME.fontUi}`;
+        const boxWidth = ctx.measureText(label).width + 34;
+        const x = width - boxWidth - 26;
+        const y = height - 54;
+
+        ctx.fillStyle = 'rgba(16, 18, 20, 0.82)';
+        ctx.beginPath();
+        ctx.roundRect(x, y, boxWidth, 28, 14);
+        ctx.fill();
+
+        ctx.fillStyle = THEME.accent;
+        ctx.beginPath();
+        ctx.arc(x + 15, y + 14, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = THEME.text;
+        ctx.fillText(label, x + boxWidth / 2 + 7, y + 15);
+        ctx.restore();
     }
 
     // ==========================================================
@@ -250,10 +301,11 @@ export class CaptureStudio {
         return el;
     }
 
-    _fireFlash() {
-        this.flash.classList.remove('is-firing');
+    _fireFlash(discreet = false) {
+        this.flash.classList.remove('is-firing', 'is-discreet');
         void this.flash.offsetWidth; // reflow forcé, sinon l'animation ne rejoue pas
         this.flash.classList.add('is-firing');
+        if (discreet) this.flash.classList.add('is-discreet');
     }
 }
 
