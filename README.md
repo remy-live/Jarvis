@@ -1,7 +1,7 @@
 # 🕹️ JARVIS ARCADE
 
 Une borne d'arcade qui se joue **avec le corps** : la webcam suit vos mains,
-votre silhouette et votre visage, et pilote quatorze mini-jeux. Aucune manette,
+votre silhouette et votre visage, et pilote dix-sept mini-jeux. Aucune manette,
 aucun compte, aucune donnée qui sort du navigateur — tout tourne en local.
 
 Fonctionne aussi **à la souris**, sans caméra ni modèles installés.
@@ -47,6 +47,9 @@ dans `js/core/Config.js` et retirez `assets/models/` du `.gitignore`.
 | --- | :---: | :---: | --- |
 | **1·2·3 Soleil** | ✓ | ✓ | Avancer au vert, se figer au rouge — sinon, photo souvenir |
 | **Grimaces** | ✓ | ✓ | Enchaîner les têtes demandées, chacune est photographiée |
+| **Statue** | ✓ | ✓ | Reproduire la silhouette affichée ; la pose tenue est photographiée |
+| **Gardien** | ✓ | ✓ | Arrêter les balles avec tout le corps : bras, tête, genoux |
+| **Frappe** | ✓ | ✓ | Toucher les cibles d'un geste sec — la vitesse fait le score |
 | **Fil électrique** | ✓ | ✓ | Suivre un couloir du doigt sans toucher les bords |
 | **Corde & bille** | ✓ | ✓ | Une bille en équilibre sur une ficelle tendue entre les mains |
 | **Air Hockey** | ✓ (contre la machine) | ✓ | La main est le maillet, premier à sept buts |
@@ -64,12 +67,22 @@ Le menu filtre entre **Tous**, **Seul** et **À deux** ; le bouton *Au hasard*
 choisit pour vous. À la souris, les flèches déplacent la sélection et `Entrée`
 lance la partie.
 
-**1·2·3 Soleil** et **Grimaces** se servent de l'appareil photo comme d'un
-ressort de jeu : la borne déclenche toute seule au bon moment — le joueur pris
-en train de bouger au rouge, la grimace réussie — et la pellicule s'ouvre à la
-fin de la manche sur tous les clichés. **Grimaces** pose aussi un masque qui
-suit le visage (renard, pirate, robot, lunettes) : touche `N` pour en changer
-ou l'enlever.
+**1·2·3 Soleil**, **Grimaces**, **Statue** et **Gardien** se servent de
+l'appareil photo comme d'un ressort de jeu : la borne déclenche toute seule au
+bon moment — le joueur pris en train de bouger au rouge, la grimace réussie, la
+pose tenue, les cinq arrêts d'affilée — et la pellicule s'ouvre à la fin de la
+manche sur tous les clichés. **Grimaces** pose aussi un masque qui suit le
+visage (renard, pirate, robot, lunettes) : touche `N` pour en changer ou
+l'enlever.
+
+**Statue** compare l'**orientation** de vos membres à celle d'une silhouette
+modèle, jamais leur position : la pose se tient donc à n'importe quelle
+distance de la caméra, où que vous soyez dans le cadre. Un membre hors champ
+sort du calcul au lieu d'être compté comme raté — assis à un bureau, la partie
+se joue aux bras et reste jouable. **Gardien** fait l'inverse : c'est tout
+votre squelette qui devient un obstacle, chaque segment arrêtant les balles.
+**Frappe** repose sur la vitesse filtrée de la main : effleurer une cible ne
+compte pas, il faut un geste franc, et la puissance du coup fait le score.
 
 **Fil électrique** vous donne un tracé qui se resserre à chaque réussite ; à
 deux, chacun sa moitié d'écran et le même parcours, c'est une course.
@@ -78,9 +91,12 @@ deux, chacun sa moitié d'écran et le même parcours, c'est une course.
 caractéristique, l'équilibre au point bas et la bille qui file au bout dès
 qu'on tend trop. Seul, un bout est accroché à un piton et on joue autour.
 
-Deuxième joueur : placez-vous simplement à droite de l'image (le joueur 1 tient
-la gauche). Sans caméra, la touche `P` active un joueur 2 au clavier. La touche
-`G` en mode webcam crée un joueur 2 « fantôme » pour tester un duel tout seul.
+Deuxième joueur : entrez simplement dans le champ par la droite (le joueur 1
+arrive par la gauche). Chacun garde ensuite son numéro même en se croisant :
+une détection est rattachée au joueur dont elle est la plus proche, pas à la
+moitié d'écran qu'elle occupe. Sans caméra, la touche `P` active un joueur 2 au
+clavier. La touche `G` en mode webcam crée un joueur 2 « fantôme » pour tester
+un duel tout seul.
 
 ---
 
@@ -93,7 +109,7 @@ la gauche). Sans caméra, la touche `P` active un joueur 2 au clavier. La touche
 | Pointer avec l'index | Déplacer le curseur |
 | Garder la main immobile sur un bouton | Valider (cercle de progression) |
 | Pincer pouce + index | Valider immédiatement |
-| Se placer à gauche / à droite de l'image | Devenir joueur 1 / joueur 2 |
+| Entrer dans le champ côté gauche / droit | Devenir joueur 1 / joueur 2 |
 
 ### Au clavier
 
@@ -219,16 +235,24 @@ Un joueur a toujours cette forme :
 ```js
 {
     detected, x, y, z, isClicking,
+    velocity: { x, y, speed },          // pixels par seconde, déjà filtrés
     indexTip: { x, y }, handCenter: { x, y },
     pose: { raw: [33 points] },
+    poseLandmarks: [33 points miroités],
     face: { raw: [478 points], mouthOpen },
     hand: { raw: [21 points] }
 }
 ```
 
 Les points bruts sont normalisés (0 à 1) dans le repère **caméra** : pensez à
-`1 - point.x` pour l'effet miroir. `x` et `y` du joueur, eux, sont déjà en
-pixels écran et déjà miroités.
+`1 - point.x` pour l'effet miroir. `poseLandmarks` est la même liste déjà
+miroitée, prête à être multipliée par `virtW`/`virtH`. `x` et `y` du joueur,
+eux, sont déjà en pixels écran et déjà miroités.
+
+`velocity` vient du filtre de pointage, pas d'une soustraction entre deux
+frames : une dérivée brute, prise entre deux analyses de l'IA, serait bien trop
+bruitée pour distinguer une frappe d'un tremblement. C'est ce qui rend un jeu
+comme **Frappe** possible.
 
 ### N'activez que ce dont vous avez besoin
 
@@ -237,6 +261,30 @@ this.setup({ cameraMode: 'fullscreen', hands: true, pose: false, face: false });
 ```
 
 Chaque détecteur inutile coûte environ 30 % de CPU pour rien.
+
+---
+
+## Qualité du suivi
+
+Un suivi par caméra tremble à l'arrêt et traîne en mouvement. Un lissage à
+coefficient fixe ne peut pas régler les deux : plus on lisse, plus on ajoute de
+retard. D'où les quatre pièces de `js/input/filters.js` :
+
+- **filtre « 1 € »** (Casiez, Roussel & Vogel, 2012) sur chaque position : sa
+  fréquence de coupure monte avec la vitesse observée. Très filtrant quand la
+  main est posée — le curseur ne vibre plus sur un bouton — presque transparent
+  quand elle part vite, donc sans retard sur un geste franc. Réglé par
+  `input.filter` ; `input.smoothing` n'est plus qu'un curseur entre deux
+  coupures ;
+- **vitesse filtrée gratuite.** Le filtre calcule déjà la dérivée pour
+  s'adapter : elle est exposée aux jeux sous `player.velocity` ;
+- **hystérésis sur le pincement** (déclencheur de Schmitt) : on ferme sous
+  `pinchOn`, on ne rouvre qu'au-dessus de `pinchOff`. Avec un seuil unique, un
+  pincement « presque fermé » s'allumait et s'éteignait dix fois par seconde ;
+- **identité stable.** Une détection est rattachée au joueur dont la dernière
+  position est la plus proche, avec une pénalité de changement
+  (`reassignPenalty`). Deux joueurs qui se croisent ne s'échangent plus leurs
+  curseurs, alors que le découpage par moitié d'écran le garantissait presque.
 
 ---
 
@@ -264,6 +312,10 @@ Ce que fait le moteur pour tenir la cadence :
   jeu, et le sélecteur du bandeau permet de forcer deux ;
 - **jamais deux fois la même image.** La webcam produit 30 images par seconde
   pour un écran à 60 : l'analyse et le retour vidéo se calent dessus ;
+- **image figée, analyse sautée.** Une vignette 32 × 24 de chaque image est
+  comparée à la précédente : en dessous de `staticThreshold`, rien n'a bougé et
+  l'inférence est inutile. Une analyse est tout de même forcée toutes les
+  `staticMaxSkipMs` pour ne jamais rester bloqué sur une détection périmée ;
 - **seuls les détecteurs demandés tournent** — chacun en trop coûte plein pot ;
 - image d'analyse réduite (384 × 288) et retour caméra dessiné en 960 px de
   large, étiré par le CSS : invisible sur un décor atténué, deux fois moins de
@@ -308,9 +360,12 @@ js/
 │   ├── AudioManager.js   musique et bruitages
 │   └── Stats.js          compteur de performances
 ├── input/            tout ce qui produit des « joueurs »
-│   ├── InputSystem.js      webcam + MediaPipe
-│   ├── FallbackInput.js    souris/clavier, même format de sortie
-│   └── CursorController.js curseur virtuel et validation par survol
+│   ├── InputSystem.js        webcam + MediaPipe
+│   ├── filters.js            filtre 1 €, hystérésis
+│   ├── VisionWorkerClient.js dialogue avec le worker d'inférence
+│   ├── vision.worker.js      l'IA, hors du fil principal
+│   ├── FallbackInput.js      souris/clavier, même format de sortie
+│   └── CursorController.js   curseur virtuel et validation par survol
 ├── capture/          photo et vidéo
 │   ├── FrameComposer.js  fusionne les calques en une image
 │   ├── VideoRecorder.js  MediaRecorder sur le canvas composé

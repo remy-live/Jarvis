@@ -19,12 +19,15 @@ import './WireMaze.js';
 import './RopeBall.js';
 
 // --- Duels et défis à la main ---
+import './PunchRush.js';
 import './AirHockey.js';
 import './BubblePop.js';
 import './FruitBlade.js';
 import './NeonBrickBattle.js';
 
 // --- Corps entier ---
+import './PoseStatue.js';
+import './Goalkeeper.js';
 import './RedLight.js';
 import './LaserDodge.js';
 import './NeonInvaders.js';
