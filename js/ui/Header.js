@@ -33,6 +33,7 @@ export class Header {
                 </button>
                 <button id="btn-photo" class="btn-icon" type="button" aria-label="Prendre une photo" title="Photo (C)">${ICONS.camera}</button>
                 <button id="btn-gallery" class="btn-icon" type="button" aria-label="Ouvrir la pellicule" title="Pellicule (G)">${ICONS.gallery}</button>
+                <button id="btn-quality" class="btn-icon" type="button" aria-label="Qualité" title="Qualité">${ICONS.quality}</button>
                 <button id="btn-sound" class="btn-icon" type="button" aria-label="Couper le son" title="Son">${ICONS.soundOn}</button>
             </div>
         `;
@@ -48,7 +49,10 @@ export class Header {
         on('#btn-photo', () => this.engine.capture.photo());
         on('#btn-record', () => this.engine.capture.toggleRecording());
         on('#btn-gallery', () => this.engine.capture.openGallery());
+        on('#btn-quality', () => this.cycleQuality());
         on('#btn-sound', () => this.toggleSound());
+
+        this.refreshQuality();
 
         this.dom.querySelectorAll('.switch-opt').forEach((opt) => {
             opt.addEventListener('click', () => this.setPlayerCount(Number(opt.dataset.val)));
@@ -84,8 +88,40 @@ export class Header {
         this.dom.querySelector('#btn-record').classList.toggle('is-recording', isRecording);
     }
 
-    /** Badge d'information (ex : « mode souris »). */
+    /**
+     * Qualité : automatique, puis chacun des paliers, en boucle.
+     * Une borne posée sur une machine modeste peut ainsi être calée une
+     * fois pour toutes, sans attendre que la mesure fasse son travail.
+     */
+    cycleQuality() {
+        const label = this.engine.quality.cycle();
+        this.refreshQuality();
+        this.flashNotice(`Qualité : ${label}`);
+    }
+
+    refreshQuality() {
+        const button = this.dom.querySelector('#btn-quality');
+        if (!button) return;
+        const quality = this.engine.quality;
+        button.title = `Qualité : ${quality.label} — cliquez pour changer`;
+        button.setAttribute('aria-label', button.title);
+        button.classList.toggle('is-dim', !quality.auto && quality.level > 0);
+    }
+
+    /** Badge d'information permanent (ex : « mode souris »). */
     setNotice(text) {
+        this._notice = text || '';
+        this._showNotice(this._notice);
+    }
+
+    /** Message passager, qui laisse ensuite revenir le badge permanent. */
+    flashNotice(text, duration = 3500) {
+        this._showNotice(text);
+        clearTimeout(this._flashTimer);
+        this._flashTimer = setTimeout(() => this._showNotice(this._notice || ''), duration);
+    }
+
+    _showNotice(text) {
         const notice = this.dom.querySelector('#header-notice');
         notice.textContent = text || '';
         notice.hidden = !text;
@@ -98,5 +134,6 @@ const ICONS = {
     camera: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13.5" r="3.5"/></svg>`,
     gallery: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m7 15 3-3.5 2.5 3L15 11l3 4"/></svg>`,
     soundOn: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9.5h3L12 6v12l-4-3.5H5z"/><path d="M16 9.5a4 4 0 0 1 0 5"/><path d="M18.5 7a7.5 7.5 0 0 1 0 10"/></svg>`,
-    soundOff: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9.5h3L12 6v12l-4-3.5H5z"/><path d="m16.5 10 4 4m0-4-4 4"/></svg>`
+    soundOff: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9.5h3L12 6v12l-4-3.5H5z"/><path d="m16.5 10 4 4m0-4-4 4"/></svg>`,
+    quality: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18a8 8 0 0 1 16 0"/><path d="m12 14 4-4"/><circle cx="12" cy="18" r="1.2"/></svg>`
 };

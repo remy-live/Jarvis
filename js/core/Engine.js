@@ -3,6 +3,7 @@ import { CONFIG } from './Config.js';
 import { Registry } from './GameRegistry.js';
 import { AudioManager } from './AudioManager.js';
 import { Stats } from './Stats.js';
+import { Quality } from './Quality.js';
 import { CursorController } from '../input/CursorController.js';
 import { CaptureStudio } from '../capture/CaptureStudio.js';
 import { Header } from '../ui/Header.js';
@@ -31,6 +32,9 @@ export class Engine {
         this.clock = new THREE.Clock();
         this.audio = new AudioManager();
         this.stats = new Stats(this);
+
+        // Mesure la machine et ajuste ce qui coûte, sans toucher aux jeux
+        this.quality = new Quality(inputs);
 
         this.cursor = new CursorController({
             getPlayers: () => this.inputs.players,
@@ -210,6 +214,12 @@ export class Engine {
             this.capture.renderOverlay(this.display.ctx, this.display.virtW, this.display.virtH);
             this.stats.render(this.display.ctx, dt);
             this.display.done();
+
+            // Le compteur de FPS tourne en permanence, même masqué :
+            // c'est lui qui renseigne le gestionnaire de qualité.
+            this.quality.update(dt, this.stats.fps, this.inputs.lastInferenceMs);
+            const notice = this.quality.takeNotice();
+            if (notice) this.header.flashNotice(notice);
         } catch (error) {
             // Un jeu qui plante ne doit pas figer toute la borne
             console.error('❌ Erreur dans la boucle de jeu :', error);

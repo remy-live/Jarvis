@@ -1,270 +1,321 @@
 import { Game } from '../core/Game.js';
 import { registerGame } from '../core/GameRegistry.js';
-import { spawnItem, createParticles } from './utils_2d.js';
-import { AudioManager } from '../core/AudioManager.js';
+import { GameOverModal } from '../ui/GameOverModal.js';
+import { THEME, alpha, playerColor } from '../core/Theme.js';
+import { drawMessage, drawScoreBar, drawGauge, Particles } from './shared.js';
+import { drawMask, faceFrame } from './faceMask.js';
 
+const ROUND_TIME = 60;
+const GRAVITY = 260;
+const GOLD_CHANCE = 0.16;
+const MOUTH_OPEN = 0.045;   // écartement des lèvres (normalisé) = bouche ouverte
+const PHOTO_COOLDOWN = 6;
+
+/**
+ * NOISETTES
+ *
+ * Un masque d'écureuil suit votre visage, des noisettes tombent : il faut
+ * ouvrir la bouche au bon moment pour les gober. Les dorées valent cinq
+ * fois plus et déclenchent la photo souvenir.
+ *
+ * Tout est dessiné sur le canvas, dans le repère local du visage (centre =
+ * nez, axe = menton→front). C'est ce qui fait que le masque suit la tête
+ * quand elle tourne ou s'éloigne — une version DOM positionnée en pixels
+ * d'écran décrochait dès que le visage ne regardait plus droit devant.
+ */
 export class NutsGame extends Game {
-    constructor(game) {
-        super(game);
-        this.id = 'game_nuts';
-        this.name = 'NOISETTES EXPRESSIVE';
-        this.game = game;
-        
-        this.domLayer = this.game.display.gameLayer;
-        this.ctx = this.game.display.ctx;
-        
-        this.w = window.innerWidth;
-        this.h = window.innerHeight;
-        
-        this.interval = null;
-        this.mask = null;
-        
-        // Physique Masque
-        this.pose = { x: this.w/2, y: this.h/2, scale: 1, angle: 0 };
-        this.SMOOTH = 0.5; // Un peu plus doux pour éviter les tremblements
-
-        this.mouthThreshold = 0.03; 
-        this.score = 0;
-        this.audioConfig = {
-            music: './assets/sounds/music/Nuts.mp3', 
-            sfx: {
-                'crunch': './assets/sounds/sfx/crunch.wav', 
-                'bonus':  './assets/sounds/sfx/win.wav'
-            }
-        };
-        // On demande uniquement le visage
-        this.setup({
-            cameraMode: 'fullscreen', 
-            hands: false,
-            face: true,             
-            pose: false             
-        });
+    constructor(engine) {
+        super(engine);
+        this.modal = new GameOverModal(engine);
+        this.particles = new Particles(280);
     }
 
     enter() {
-        console.log("🐿️ NOISETTES: Démarrage");
-        this.game.display.setBackground("linear-gradient(to bottom, #a8bcc9 0%, #E0F7FA 100%)");
-        this.game.audio.setupGameAudio(this.audioConfig); 
-        
-        // CRÉATION DU MASQUE DOM
-        this.mask = document.createElement('div');
-        this.mask.id = 'squirrel-mask';
-        this.mask.innerHTML = `
-            <div class="mask-head">
-                <div class="mask-eyes">
-                    <div id="eye-l" class="eye"></div>
-                    <div id="eye-r" class="eye"></div>
-                </div>
-                <div class="mask-nose"></div>
-                
-                <div class="mask-mouth" id="squirrel-mouth">
-                    <div class="mask-teeth">
-                        <div class="tooth"></div>
-                        <div class="tooth"></div>
-                    </div>
-                </div>
-            </div>`;
-        this.domLayer.appendChild(this.mask);
-
-        this.startSpawner();
-        this.score = 0;
-    }
-
-    startSpawner() {
-        this.interval = setInterval(() => {
-            let cfg = { emoji: '🌰', size: 70, speed: 3.5, className: 'nut-base' };
-            if(Math.random() > 0.85) cfg = { emoji: '🌟', size: 60, speed: 2.5, className: 'nut-gold' };
-            spawnItem(cfg, this.domLayer, this.w, this.h);
-        }, 1200);
-    }
-
-    update(dt) {
-        const inputs = this.game.inputs;
-        const display = this.game.display;
-        
-        // On prend le joueur 1 par défaut
-        const player = inputs.players[0];
-
-        // --- 1. SÉCURITÉ ---
-        // On vérifie qu'on a bien un visage détecté
-        if (!player || !player.detected || !player.face || !player.face.raw) return;
-
-        // --- 2. RÉCUPÉRATION INTELLIGENTE DES DONNÉES ---
-        // Le nouveau InputSystem stocke la position principale lissée dans player.x / player.y
-        // Mais pour le visage spécifiquement, on veut être précis.
-        
-        // Si InputSystem a calculé 'nose' (position lissée du nez), on l'utilise.
-        // Sinon, on prend player.x/y qui est la position "maître".
-        let targetX = player.x;
-        let targetY = player.y;
-
-        if (player.face.nose) {
-            targetX = player.face.nose.x;
-            targetY = player.face.nose.y;
-        }
-
-        const lm = player.face.raw; // Les points bruts (normalisés 0-1)
-
-        // --- 3. CALCULS GÉOMÉTRIQUES ---
-        
-        // A. Calcul de l'angle (Front vs Nez)
-        // Point 10 = Haut du front, Point 1 = Bout du nez
-        // Attention : lm contient des coordonnées normalisées (0-1), il faut convertir en pixels pour l'angle
-        const foreheadRaw = lm[10]; 
-        const noseRaw = lm[1];
-
-        // Conversion en pixels
-        const p1 = display.toVirtual(1 - foreheadRaw.x, foreheadRaw.y); // Front
-        const p2 = display.toVirtual(1 - noseRaw.x, noseRaw.y);         // Nez (Reference pour l'angle)
-
-        const dx = p1.x - p2.x;
-        const dy = p1.y - p2.y;
-        
-        // Angle (+90 car le masque HTML est droit par défaut)
-        const targetAngle = (Math.atan2(dy, dx) * 180 / Math.PI) + 90;
-        
-        // B. Calcul de l'échelle (Distance Front-Menton ou Front-Nez)
-        // On utilise la distance calculée précédemment
-        const distPixels = Math.sqrt(dx*dx + dy*dy);
-        // Facteur d'échelle empirique (à ajuster selon la taille de tes assets CSS)
-        const targetScale = (distPixels / 100) * 1.8; 
-
-        // C. Ouverture de la bouche
-        // Points 13 (Lèvre haut) et 14 (Lèvre bas)
-        const upperLip = lm[13];
-        const lowerLip = lm[14];
-        // Distance simple (pas besoin de convertir en pixels, le ratio suffit)
-        const mouthDist = Math.hypot(upperLip.x - lowerLip.x, upperLip.y - lowerLip.y);
-        
-        // Seuil d'ouverture (ajusté pour être réactif)
-        // 0.05 est une bonne valeur moyenne pour une bouche ouverte
-        const mouthOpening = Math.max(0, (mouthDist - 0.01) * 30); 
-
-        // D. Yeux (Clignement)
-        // Oeil Gauche (386 haut, 374 bas) - Oeil Droit (159 haut, 145 bas)
-        const leftEyeOpen = Math.abs(lm[386].y - lm[374].y) > 0.012;
-        const rightEyeOpen = Math.abs(lm[159].y - lm[145].y) > 0.012;
-
-        // --- 4. APPLICATION PHYSIQUE (LISSAGE) ---
-        // On lisse les mouvements pour éviter que le masque ne saute partout
-        this.pose.x += (targetX - this.pose.x) * this.SMOOTH;
-        this.pose.y += (targetY - this.pose.y) * this.SMOOTH;
-        this.pose.scale += (targetScale - this.pose.scale) * this.SMOOTH;
-        
-        // Lissage angulaire correct (évite le tour complet lors du passage -180/180)
-        let diffAngle = targetAngle - this.pose.angle;
-        while (diffAngle > 180) diffAngle -= 360;
-        while (diffAngle < -180) diffAngle += 360;
-        this.pose.angle += diffAngle * this.SMOOTH;
-
-        // --- 5. MISE À JOUR DOM ---
-        if (this.mask) {
-            // Transformation CSS globale
-            this.mask.style.transform = 
-                `translate3d(${this.pose.x}px, ${this.pose.y}px, 0) ` +
-                `translate(-50%, -50%) ` +
-                `scale(${this.pose.scale}) ` +
-                `rotate(${this.pose.angle}deg)`;
-            
-            // Bouche
-            const mouthEl = this.mask.querySelector('#squirrel-mouth');
-            if(mouthEl) {
-                // On limite la hauteur max pour pas que ça casse le design
-                let hPx = 10 + (mouthOpening * 40);
-                hPx = Math.min(70, hPx);
-                mouthEl.style.height = `${hPx}px`;
-            }
-
-            // Yeux
-            const eyeL = this.mask.querySelector('#eye-l');
-            const eyeR = this.mask.querySelector('#eye-r');
-            if(eyeL) eyeL.classList.toggle('closed', !leftEyeOpen);
-            if(eyeR) eyeR.classList.toggle('closed', !rightEyeOpen);
-        }
-
-        // --- 6. LOGIQUE DE JEU (COLLISIONS) ---
-        const isMouthOpen = mouthDist > 0.04; // Seuil pour "Manger"
-        
-        // Point de collision (un peu décalé devant le masque selon l'angle)
-        // 60px est environ la distance entre le centre de la tête et la bouche
-        const hitOffset = 60 * this.pose.scale;
-        const hitX = this.pose.x + Math.sin(-this.pose.angle * Math.PI/180) * hitOffset;
-        const hitY = this.pose.y + Math.cos(-this.pose.angle * Math.PI/180) * hitOffset;
-        
-        const interactionRadius = 50 * this.pose.scale; 
-        const items = this.domLayer.querySelectorAll('.game-item');
-
-        items.forEach(el => {
-            if(el.dataset.status === 'eaten') return;
-
-            const r = el.getBoundingClientRect();
-            const cx = r.left + r.width/2; 
-            const cy = r.top + r.height/2;
-            const d = Math.hypot(hitX - cx, hitY - cy);
-
-            // Zone d'interaction
-            if (d < interactionRadius) {
-                if (!isMouthOpen) {
-                     // Si bouche fermée, on pousse la noisette (petit feedback physique)
-                     const pushX = (cx - hitX) * 0.2;
-                     el.style.transform = `translate(${pushX}px, -10px)`;
-                } else {
-                    // Si bouche ouverte
-                    if (d < 35 * this.pose.scale) { 
-                        // MIAM !
-                        this.eatNut(el, cx, cy);
-                    } else {
-                        // Attraction magnétique vers la bouche
-                        const pullX = (hitX - cx) * 0.2;
-                        const pullY = (hitY - cy) * 0.2;
-                        el.style.transform = `translate(${pullX}px, ${pullY}px) scale(0.9)`;
-                    }
-                }
-            }
-        });
-    }
-
-    eatNut(el, x, y) {
-        el.dataset.status = 'eaten';
-        el.remove();
-        this.score++;
-        
-        if (el.classList.contains('nut-gold')) {
-            this.game.audio.playSFX('bonus');
-        } else {
-            this.game.audio.playSFX('crunch');
-        }
-        
-        createParticles(x, y, '#a9764b', this.domLayer);
-        
-        // Feedback visuel sur le masque
-        if(this.mask) {
-            const mouthEl = this.mask.querySelector('#squirrel-mouth');
-            if(mouthEl) {
-                mouthEl.style.backgroundColor = "#5a2d0c"; // Assombrir l'intérieur
-                setTimeout(() => mouthEl.style.backgroundColor = "", 100);
-            }
-        }
-    }
-
-    render(display) {
-        const ctx = display.ctx;
-        ctx.fillStyle = "#5a2d0c";
-        ctx.font = "bold 40px 'Orbitron'";
-        ctx.textAlign = "left";
-        ctx.fillText(`NOISETTES: ${this.score}`, 30, 60);
-        
-        ctx.strokeStyle = "white";
-        ctx.lineWidth = 2;
-        ctx.strokeText(`NOISETTES: ${this.score}`, 30, 60);
+        this.gameConfig = { cameraMode: 'fullscreen', hands: false, pose: false, face: true, smoothing: 0.7 };
+        this.setup(this.gameConfig);
+        this.game.display.setBackground(THEME.bg);
+        this.reset();
     }
 
     exit() {
         this.clearTimers();
-        clearInterval(this.interval);
-        if(this.domLayer) this.domLayer.innerHTML = '';
-        this.mask = null;
+        this.modal.hide();
+        this.particles.clear();
     }
+
+    reset() {
+        this.state = 'WAITING';
+        this.timeLeft = ROUND_TIME;
+        this.spawnTimer = 1;
+        this.nuts = [];
+        this.score = 0;
+        this.eaten = 0;
+        this.missed = 0;
+        this.gold = 0;
+        this.photoCooldown = 0;
+        this.chew = 0;
+
+        this.mouth = null;      // position écran de la bouche
+        this.mouthOpen = 0;     // 0 à 1, pour animer le masque
+        this.isOpen = false;
+        this.reach = 60;        // rayon d'action, proportionnel au visage
+
+        this.particles.clear();
+        this.modal.hide();
+    }
+
+    // ==========================================================
+    //  BOUCLE
+    // ==========================================================
+
+    update(dt) {
+        if (this.modal.isVisible) return;
+
+        const display = this.game.display;
+        this._readFace(display);
+
+        if (this.state === 'WAITING') {
+            if (this.mouth) this.state = 'PLAYING';
+            return;
+        }
+        if (this.state !== 'PLAYING') return;
+
+        this.timeLeft -= dt;
+        this.chew = Math.max(0, this.chew - dt * 3);
+        this.photoCooldown = Math.max(0, this.photoCooldown - dt);
+
+        if (this.timeLeft <= 0) {
+            this.timeLeft = 0;
+            this._finish();
+            return;
+        }
+
+        this._spawn(dt, display);
+        this._updateNuts(dt, display);
+        this.particles.update(dt, 200);
+    }
+
+    /** Bouche du joueur : position écran et ouverture. */
+    _readFace(display) {
+        const raw = this.game.inputs.players[0]?.face?.raw;
+        const upper = raw?.[13];
+        const lower = raw?.[14];
+        const top = raw?.[10];
+        const chin = raw?.[152];
+
+        if (!upper || !lower || !top || !chin) {
+            this.mouth = null;
+            this.mouthOpen = 0;
+            this.isOpen = false;
+            return;
+        }
+
+        const height = Math.hypot(top.x - chin.x, top.y - chin.y) || 0.2;
+
+        // Le miroir est appliqué ici, comme partout ailleurs : les points
+        // bruts sont dans le repère caméra, l'écran est renvoyé à l'envers.
+        this.mouth = display.toVirtual(1 - (upper.x + lower.x) / 2, (upper.y + lower.y) / 2);
+
+        // Rapporté à la hauteur du visage : s'éloigner ne doit rien changer
+        const gap = Math.hypot(upper.x - lower.x, upper.y - lower.y) / height;
+        this.mouthOpen = Math.max(0, Math.min(1, (gap - 0.04) / 0.22));
+        this.isOpen = gap > MOUTH_OPEN;
+
+        // Rayon d'action proportionnel au visage : un joueur au fond de la
+        // pièce ne doit pas avoir une bouche minuscule à viser.
+        const frame = faceFrame(raw, display);
+        this.reach = frame ? Math.max(46, frame.height * 0.42) : 60;
+    }
+
+    _spawn(dt, display) {
+        this.spawnTimer -= dt;
+        if (this.spawnTimer > 0) return;
+
+        const progress = 1 - this.timeLeft / ROUND_TIME;
+        this.spawnTimer = 1.15 - progress * 0.6;
+
+        const gold = Math.random() < GOLD_CHANCE;
+        this.nuts.push({
+            x: display.virtW * (0.12 + Math.random() * 0.76),
+            y: -40,
+            vx: (Math.random() - 0.5) * 60,
+            vy: 40 + progress * 90,
+            spin: (Math.random() - 0.5) * 3,
+            angle: Math.random() * Math.PI,
+            radius: gold ? 20 : 17,
+            gold
+        });
+    }
+
+    _updateNuts(dt, display) {
+        for (let i = this.nuts.length - 1; i >= 0; i--) {
+            const nut = this.nuts[i];
+
+            // Bouche ouverte : la noisette est aspirée. Bouche fermée, elle
+            // rebondit sur le museau — le joueur voit qu'il a raté de peu.
+            if (this.mouth) {
+                const dx = this.mouth.x - nut.x;
+                const dy = this.mouth.y - nut.y;
+                const distance = Math.hypot(dx, dy);
+
+                if (distance < this.reach) {
+                    if (this.isOpen) {
+                        if (distance < this.reach * 0.55) {
+                            this._eat(nut);
+                            this.nuts.splice(i, 1);
+                            continue;
+                        }
+                        nut.vx += (dx / distance) * 700 * dt;
+                        nut.vy += (dy / distance) * 700 * dt;
+                    } else if (distance < this.reach * 0.7) {
+                        nut.vx -= (dx / distance) * 420 * dt;
+                        nut.vy -= (dy / distance) * 260 * dt;
+                    }
+                }
+            }
+
+            nut.vy += GRAVITY * dt;
+            nut.x += nut.vx * dt;
+            nut.y += nut.vy * dt;
+            nut.angle += nut.spin * dt;
+
+            if (nut.y > display.virtH + 60) {
+                this.nuts.splice(i, 1);
+                this.missed++;
+            }
+        }
+    }
+
+    _eat(nut) {
+        this.eaten++;
+        this.chew = 1;
+        this.score += nut.gold ? 50 : 10;
+        this.game.playSound('select');
+
+        this.particles.spawn(nut.x, nut.y, nut.gold ? THEME.highlight : THEME.accentWarm,
+            { count: nut.gold ? 20 : 10, speed: 240, size: 4, life: 0.5 });
+
+        if (!nut.gold || this.photoCooldown > 0) return;
+
+        // La dorée, c'est le moment de gloire : on le photographie
+        this.gold++;
+        this.photoCooldown = PHOTO_COOLDOWN;
+        this.game.capture.snap(`Noisette dorée — ${this.score} points`);
+    }
+
+    _finish() {
+        this.state = 'GAMEOVER';
+        this.after(700, () => {
+            this.modal.show(`${this.score} points · ${this.eaten} noisettes`,
+                this.gameConfig, () => this.reset());
+            if (this.gold > 0) this.after(900, () => this.game.capture.openGallery());
+        });
+    }
+
+    // ==========================================================
+    //  RENDU
+    // ==========================================================
+
+    render(display) {
+        const ctx = display.ctx;
+        const w = display.virtW;
+        const h = display.virtH;
+
+        ctx.fillStyle = 'rgba(16, 18, 20, 0.4)';
+        ctx.fillRect(0, 0, w, h);
+
+        for (const nut of this.nuts) drawNut(ctx, nut);
+        this.particles.draw(ctx);
+        this._drawMask(display);
+
+        if (this.state === 'WAITING') {
+            drawMessage(ctx, w, h, 'NOISETTES',
+                'Montrez votre visage · ouvrez la bouche pour gober les noisettes');
+            return;
+        }
+
+        this._drawHud(ctx, w, h);
+    }
+
+    _drawMask(display) {
+        const raw = this.game.inputs.players[0]?.face?.raw;
+        if (!raw) return;
+
+        // Un coup de mâchoire à chaque noisette avalée
+        const open = Math.max(this.mouthOpen, this.chew * 0.8);
+        drawMask(display.ctx, raw, display, 'ecureuil', { mouthOpen: open });
+    }
+
+    _drawHud(ctx, w, h) {
+        drawScoreBar(ctx, w, [
+            { label: 'Points', value: this.score, color: playerColor(0) },
+            { label: 'Temps', value: Math.ceil(this.timeLeft), color: this.timeLeft < 10 ? THEME.danger : THEME.textStrong },
+            { label: 'Dorées', value: this.gold, color: THEME.highlight }
+        ]);
+
+        drawGauge(ctx, w / 2 - 110, 132, 220, 3, this.timeLeft / ROUND_TIME,
+            this.timeLeft < 10 ? THEME.danger : THEME.accent);
+
+        // Témoin d'ouverture : on comprend tout de suite ce que la borne voit
+        if (this.mouth) {
+            ctx.save();
+            ctx.strokeStyle = alpha(this.isOpen ? THEME.success : THEME.textMuted, 0.5);
+            ctx.lineWidth = this.isOpen ? 2.5 : 1;
+            ctx.beginPath();
+            ctx.arc(this.mouth.x, this.mouth.y, this.reach * 0.55, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.fillStyle = THEME.textMuted;
+        ctx.font = `400 13px ${THEME.fontUi}`;
+        ctx.fillText(this.missed > 0 ? `${this.missed} noisettes perdues` : 'Aucune noisette perdue',
+            w / 2, h - 40);
+        ctx.restore();
+    }
+}
+
+/* ------------------------------------------------------------------ */
+
+/** Un gland : une coque ronde et son chapeau. */
+function drawNut(ctx, nut) {
+    const body = nut.gold ? THEME.highlight : '#a9764b';
+    const cap = nut.gold ? '#b9a06a' : '#6b4a30';
+
+    ctx.save();
+    ctx.translate(nut.x, nut.y);
+    ctx.rotate(nut.angle);
+
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.ellipse(0, nut.radius * 0.18, nut.radius * 0.8, nut.radius * 0.92, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = cap;
+    ctx.beginPath();
+    ctx.ellipse(0, -nut.radius * 0.45, nut.radius * 0.85, nut.radius * 0.45, 0, Math.PI, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(-nut.radius * 0.85, -nut.radius * 0.5, nut.radius * 1.7, nut.radius * 0.22);
+
+    // Petite tige
+    ctx.strokeStyle = cap;
+    ctx.lineWidth = Math.max(2, nut.radius * 0.14);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0, -nut.radius * 0.8);
+    ctx.lineTo(0, -nut.radius * 1.15);
+    ctx.stroke();
+
+    if (nut.gold) {
+        ctx.strokeStyle = alpha(THEME.textStrong, 0.7);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(-nut.radius * 0.3, nut.radius * 0.1, nut.radius * 0.22, Math.PI * 0.8, Math.PI * 1.6);
+        ctx.stroke();
+    }
+    ctx.restore();
 }
 
 registerGame({
@@ -273,6 +324,6 @@ registerGame({
     icon: '🐿️',
     color: '#c2a882',
     players: 1,
-    description: 'Attrapez les noisettes en ouvrant la bouche.',
+    description: 'Le masque d\'écureuil suit votre visage : ouvrez la bouche au bon moment.',
     class: NutsGame
 });

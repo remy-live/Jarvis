@@ -30,6 +30,15 @@ export class InputSystem {
         this.analysisCanvas.height = CONFIG.vision.analysisHeight;
         this.analysisCtx = this.analysisCanvas.getContext('2d', { willReadFrequently: true });
 
+        // Réglages ajustables à chaud par le gestionnaire de qualité
+        // (js/core/Quality.js). Ils partent de la configuration du projet.
+        this._analysis = { width: CONFIG.vision.analysisWidth, height: CONFIG.vision.analysisHeight };
+        this._maxFps = CONFIG.vision.maxFps;
+        this._feedbackMaxWidth = CONFIG.vision.feedbackMaxWidth;
+        this._cameraSize = { ...CONFIG.vision.camera };
+        this.drawOverlays = true;
+        this.qualityName = 'élevée';
+
         // 3. État du système
         this.players = [];
         this.isReady = false;
@@ -188,11 +197,25 @@ export class InputSystem {
         const filter = this._filters[target.id];
         const point = filter.filter(x, y, dt);
 
-        target.x = point.x;
-        target.y = point.y;
         target.velocity.x = filter.x.speed;
         target.velocity.y = filter.y.speed;
         target.velocity.speed = filter.speed;
+
+        // Compensation de latence : la position affichée est celle d'une
+        // analyse déjà ancienne. On la projette en avant selon la vitesse
+        // mesurée, du temps qu'aura duré cette analyse. Le geste redevient
+        // synchrone du curseur, y compris sur une machine lente — là où le
+        // retard était le plus pénible.
+        const lead = this._lead();
+        target.x = point.x + filter.x.speed * lead;
+        target.y = point.y + filter.y.speed * lead;
+    }
+
+    /** Anticipation, en secondes : le coût d'une analyse, plafonné. */
+    _lead() {
+        if (this.mode !== 'vision') return 0;
+        const cap = CONFIG.input.leadMs / 1000;
+        return Math.min(cap, this.lastInferenceMs / 1000);
     }
 
     /** Profondeur estimée à partir de la taille apparente de la main. */
@@ -214,6 +237,46 @@ export class InputSystem {
         this.resizeFeedbackCanvas();
     }
 
+    /**
+     * Applique un palier de qualité (voir js/core/Quality.js).
+     *
+     * Tout est réglable à chaud : rien n'est recréé, ni la caméra, ni les
+     * modèles. Un changement de palier en pleine partie ne se voit donc
+     * pas autrement que par un décor un peu plus grossier.
+     */
+    applyQuality(level) {
+        this.qualityName = level.name;
+        this._maxFps = level.maxFps;
+        this._feedbackMaxWidth = level.feedbackMaxWidth;
+        this.drawOverlays = level.overlays;
+
+        if (level.analysis.width !== this._analysis.width || level.analysis.height !== this._analysis.height) {
+            this._analysis = { ...level.analysis };
+            this.analysisCanvas.width = this._analysis.width;
+            this.analysisCanvas.height = this._analysis.height;
+            this.workerClient?.resize(this._analysis.width, this._analysis.height);
+        }
+
+        this._applyCameraSize(level.camera);
+        this.resizeFeedbackCanvas();
+    }
+
+    /**
+     * Demande une autre définition à la webcam, sans couper le flux.
+     * Moins de pixels à décoder puis à réduire : sur une machine modeste,
+     * c'est souvent le poste le plus lourd de toute la chaîne.
+     */
+    _applyCameraSize(size) {
+        if (!size || (size.width === this._cameraSize.width && size.height === this._cameraSize.height)) return;
+        this._cameraSize = { ...size };
+
+        const track = this.stream?.getVideoTracks?.()[0];
+        if (!track?.applyConstraints) return;
+
+        track.applyConstraints({ width: { ideal: size.width }, height: { ideal: size.height } })
+            .catch((error) => console.warn('⚠️ Définition caméra refusée :', error?.message || error));
+    }
+
     resizeFeedbackCanvas() {
         const { clientWidth, clientHeight } = this.feedbackCanvas;
         if (!clientWidth || !clientHeight) return;
@@ -221,7 +284,7 @@ export class InputSystem {
         // Le retour caméra est un décor atténué : le dessiner en pleine
         // résolution écran coûte cher pour rien. On plafonne sa largeur et
         // on laisse le CSS l'étirer.
-        const scale = Math.min(1, CONFIG.vision.feedbackMaxWidth / clientWidth);
+        const scale = Math.min(1, this._feedbackMaxWidth / clientWidth);
         const width = Math.round(clientWidth * scale);
         const height = Math.round(clientHeight * scale);
 
@@ -297,6 +360,15 @@ export class InputSystem {
             pose: this.enablePose,
             face: this.enableFace
         });
+
+        // Chemin synchrone : les modèles sont chargés à la demande, donc
+        // un jeu qui réclame le visage pour la première fois déclenche son
+        // téléchargement ici. Le suivi démarre dès qu'il est prêt.
+        if (this.backend === 'main') {
+            this._ensureLandmarkers().catch((error) => {
+                console.warn('⚠️ Modèle indisponible :', error?.message || error);
+            });
+        }
 
         console.log(`⚙️ INPUTS: mains=${this.enableHands} pose=${this.enablePose} visage=${this.enableFace}`);
     }
@@ -402,12 +474,16 @@ export class InputSystem {
         // nouvelle image : à 30 fps caméra pour 60 fps d'écran, c'était une
         // recopie plein écran sur deux jetée à la poubelle.
         const freshFrame = !this._hasFrameCallback || this._videoFrameId !== this._drawnFrameId;
-        const draw = feedbackVisible && freshFrame;
+        const repaint = feedbackVisible && freshFrame;
 
-        if (draw) {
+        if (repaint) {
             this._drawnFrameId = this._videoFrameId;
             this._drawCameraFeedback();
         }
+
+        // Les squelettes tracés sur le retour vidéo sont un confort, pas une
+        // information de jeu : ils sautent en premier quand la machine peine.
+        const draw = repaint && this.drawOverlays;
 
         this._runDetectors(timestamp);
 
@@ -454,7 +530,9 @@ export class InputSystem {
         if (this.video.readyState < 2) return;
         if (this._hasFrameCallback && !this._videoFrameSeen) return;
 
-        const active = this._activeDetectors();
+        const active = this.backend === 'worker'
+            ? this._activeDetectors()
+            : this._activeDetectors().filter((kind) => this[`${kind}Landmarker`]);
         if (active.length === 0) return;
 
         if (this.backend === 'worker') {
@@ -462,7 +540,7 @@ export class InputSystem {
             return;
         }
 
-        const minInterval = Math.max(1000 / CONFIG.vision.maxFps, this._detectionBudget);
+        const minInterval = Math.max(1000 / this._maxFps, this._detectionBudget);
         if (timestamp - this._lastDetectionTime < minInterval) return;
 
         this._lastDetectionTime = timestamp;
@@ -530,7 +608,7 @@ export class InputSystem {
      */
     _pumpWorker(timestamp) {
         if (this.workerClient.isBusy || this._grabbingFrame) return;
-        if (timestamp - this._lastPumpTime < 1000 / CONFIG.vision.maxFps) return;
+        if (timestamp - this._lastPumpTime < 1000 / this._maxFps) return;
 
         this._lastPumpTime = timestamp;
         this._videoFrameSeen = false;
@@ -542,8 +620,8 @@ export class InputSystem {
         // 384×288 au lieu de 1280×720, soit huit fois moins de pixels.
         this._grabbingFrame = true;
         createImageBitmap(this.video, {
-            resizeWidth: CONFIG.vision.analysisWidth,
-            resizeHeight: CONFIG.vision.analysisHeight,
+            resizeWidth: this._analysis.width,
+            resizeHeight: this._analysis.height,
             resizeQuality: 'medium'
         }).then(
             (bitmap) => {
@@ -993,10 +1071,13 @@ export class InputSystem {
         throw Object.assign(new Error('MODELS_UNAVAILABLE'), { cause: lastError });
     }
 
-    async _initWorker({ wasm, models }) {
+    async _initWorker({ wasm, models, label }) {
         // Le worker résout les chemins relatifs depuis SON dossier :
         // on lui donne des URL absolues, calculées depuis la page.
         const absolute = (path) => new URL(path, document.baseURI).href;
+        const resolve = (set) => ({
+            hand: absolute(set.hand), pose: absolute(set.pose), face: absolute(set.face)
+        });
 
         this.workerClient = new VisionWorkerClient();
         this.workerClient.onResult = (msg) => this._onWorkerResult(msg);
@@ -1006,15 +1087,18 @@ export class InputSystem {
                 staticThreshold: CONFIG.vision.staticThreshold,
                 staticMaxSkipMs: CONFIG.vision.staticMaxSkipMs,
                 wasm: absolute(wasm),
-                models: {
-                    hand: absolute(models.hand),
-                    pose: absolute(models.pose),
-                    face: absolute(models.face)
-                },
-                delegate: CONFIG.vision.delegate,
+                models: resolve(models),
+                // Les modèles étant chargés un par un, à la demande, un
+                // fichier local manquant ne se découvre plus au démarrage :
+                // le worker garde donc l'adresse de secours sous la main.
+                fallbackModels: label === 'local' && CONFIG.vision.useCdnFallback
+                    ? resolve(CONFIG.vision.cdn.models)
+                    : null,
+                delegate: resolveDelegate(),
                 players: this.trackedPlayers,
-                analysisWidth: CONFIG.vision.analysisWidth,
-                analysisHeight: CONFIG.vision.analysisHeight
+                warmup: this._activeDetectors()[0] || 'hand',
+                analysisWidth: this._analysis.width,
+                analysisHeight: this._analysis.height
             });
         } catch (error) {
             this.workerClient = null;
@@ -1040,38 +1124,72 @@ export class InputSystem {
         };
     }
 
-    async _createLandmarkers({ wasm, models }) {
-        const { delegate } = CONFIG.vision;
-        const numHands = this.trackedPlayers;
-        const numPoses = this.trackedPlayers;
-        const numFaces = this.trackedPlayers;
-        const vision = await FilesetResolver.forVisionTasks(wasm);
+    /**
+     * Prépare le chemin synchrone de secours.
+     *
+     * Aucun modèle n'est chargé ici : chacun pèse plusieurs mégaoctets et
+     * mobilise sa propre mémoire GPU. On ne charge que ce que le jeu en
+     * cours demande, au moment où il le demande.
+     */
+    async _createLandmarkers({ wasm, models, label }) {
+        this._delegate = resolveDelegate();
+        this._modelPaths = models;
+        this._fallbackModelPaths = label === 'local' && CONFIG.vision.useCdnFallback
+            ? CONFIG.vision.cdn.models
+            : null;
+        this._visionResolver = await FilesetResolver.forVisionTasks(wasm);
+        this._loading = { hand: null, pose: null, face: null };
 
-        const [hand, pose, face] = await Promise.all([
-            HandLandmarker.createFromOptions(vision, {
-                baseOptions: { modelAssetPath: models.hand, delegate },
-                runningMode: 'VIDEO',
-                numHands,
-                minHandDetectionConfidence: 0.5
-            }),
-            PoseLandmarker.createFromOptions(vision, {
-                baseOptions: { modelAssetPath: models.pose, delegate },
-                runningMode: 'VIDEO',
-                numPoses,
-                minPoseDetectionConfidence: 0.5
-            }),
-            FaceLandmarker.createFromOptions(vision, {
-                baseOptions: { modelAssetPath: models.face, delegate },
-                runningMode: 'VIDEO',
-                outputFaceBlendshapes: false,
-                outputFacialTransformationMatrixes: false,
-                numFaces
-            })
-        ]);
+        await this._ensureLandmarkers();
+    }
 
-        this.handLandmarker = hand;
-        this.poseLandmarker = pose;
-        this.faceLandmarker = face;
+    /** Charge les détecteurs manquants parmi ceux que le jeu réclame. */
+    async _ensureLandmarkers() {
+        if (!this._visionResolver) return;
+
+        const wanted = this._activeDetectors();
+        await Promise.all(wanted.map((kind) => this._loadLandmarker(kind)));
+    }
+
+    _loadLandmarker(kind) {
+        if (this[`${kind}Landmarker`]) return Promise.resolve();
+        this._loading = this._loading || { hand: null, pose: null, face: null };
+        if (this._loading[kind]) return this._loading[kind];
+
+        const vision = this._visionResolver;
+        const count = this.trackedPlayers;
+
+        const build = (modelAssetPath) => {
+            const baseOptions = { modelAssetPath, delegate: this._delegate };
+            if (kind === 'hand') {
+                return HandLandmarker.createFromOptions(vision, {
+                    baseOptions, runningMode: 'VIDEO', numHands: count, minHandDetectionConfidence: 0.5
+                });
+            }
+            if (kind === 'pose') {
+                return PoseLandmarker.createFromOptions(vision, {
+                    baseOptions, runningMode: 'VIDEO', numPoses: count, minPoseDetectionConfidence: 0.5
+                });
+            }
+            return FaceLandmarker.createFromOptions(vision, {
+                baseOptions, runningMode: 'VIDEO', numFaces: count,
+                outputFaceBlendshapes: false, outputFacialTransformationMatrixes: false
+            });
+        };
+
+        // Fichier local absent : le CDN prend le relais pour ce modèle-là.
+        const fallback = this._fallbackModelPaths?.[kind];
+        this._loading[kind] = build(this._modelPaths[kind])
+            .catch((error) => (fallback ? build(fallback) : Promise.reject(error)))
+            .then((landmarker) => {
+                this[`${kind}Landmarker`] = landmarker;
+                this._loading[kind] = null;
+            }, (error) => {
+                this._loading[kind] = null;
+                throw error;
+            });
+
+        return this._loading[kind];
     }
 
     async _setupCamera() {
@@ -1080,7 +1198,11 @@ export class InputSystem {
         }
 
         const stream = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
+            video: {
+                width: { ideal: this._cameraSize.width },
+                height: { ideal: this._cameraSize.height },
+                facingMode: 'user'
+            }
         });
 
         this.stream = stream;
@@ -1121,6 +1243,47 @@ const noop = () => {};
 
 /** Dernière position connue d'un joueur pour un type de détection. */
 const emptyAnchor = () => ({ x: 0.5, y: 0.5, active: false, misses: 0 });
+
+/**
+ * Choisit le délégué d'inférence.
+ *
+ * Le GPU gagne toujours… quand il y en a un. Sur une machine sans pilote
+ * graphique, le navigateur émule WebGL par logiciel (SwiftShader, llvmpipe) :
+ * l'inférence « GPU » passe alors par une couche d'émulation, plus lente que
+ * le chemin CPU natif de MediaPipe, qui utilise, lui, toutes les unités
+ * vectorielles du processeur.
+ */
+function resolveDelegate() {
+    const wanted = CONFIG.vision.delegate;
+    if (wanted === 'GPU' || wanted === 'CPU') return wanted;
+
+    const renderer = detectRenderer();
+    if (renderer && /swiftshader|llvmpipe|softpipe|basic render|software/i.test(renderer)) {
+        console.log(`⚙️ INPUTS: WebGL logiciel (${renderer}) → inférence sur le processeur`);
+        return 'CPU';
+    }
+    return 'GPU';
+}
+
+/** Nom de la carte graphique vue par WebGL, ou null. */
+function detectRenderer() {
+    try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (!gl) return null;
+
+        const info = gl.getExtension('WEBGL_debug_renderer_info');
+        const name = info
+            ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL)
+            : gl.getParameter(gl.RENDERER);
+
+        // Un contexte WebGL de plus compte dans le quota du navigateur
+        gl.getExtension('WEBGL_lose_context')?.loseContext();
+        return String(name || '');
+    } catch (error) {
+        return null;
+    }
+}
 
 /** Tracé du maillage facial pour la vignette de debug. */
 const FACE_ZONES = [

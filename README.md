@@ -61,7 +61,7 @@ dans `js/core/Config.js` et retirez `assets/models/` du `.gitignore`.
 | **Flappy Squat** | ✓ | ✓ | S'accroupir pour faire descendre l'oiseau |
 | **Séquence** | ✓ | ✓ | Retenir l'ordre des dalles et le refaire à la main |
 | **Shuriken Showdown** | ✓ | ✓ | Lancer d'un mouvement sec du bras |
-| **Noisettes** | ✓ | — | Attraper les noisettes en ouvrant la bouche |
+| **Noisettes** | ✓ | — | Un masque d'écureuil suit le visage, on gobe les noisettes |
 
 Le menu filtre entre **Tous**, **Seul** et **À deux** ; le bouton *Au hasard*
 choisit pour vous. À la souris, les flèches déplacent la sélection et `Entrée`
@@ -72,7 +72,7 @@ l'appareil photo comme d'un ressort de jeu : la borne déclenche toute seule au
 bon moment — le joueur pris en train de bouger au rouge, la grimace réussie, la
 pose tenue, les cinq arrêts d'affilée — et la pellicule s'ouvre à la fin de la
 manche sur tous les clichés. **Grimaces** pose aussi un masque qui suit le
-visage (renard, pirate, robot, lunettes) : touche `N` pour en changer ou
+visage (renard, écureuil, pirate, robot, lunettes) : touche `N` pour en changer ou
 l'enlever.
 
 **Statue** compare l'**orientation** de vos membres à celle d'une silhouette
@@ -149,6 +149,9 @@ Trois boutons dans le bandeau, ou trois touches :
 | ⏺ / `R` | Démarre puis arrête un clip vidéo (chrono affiché à l'écran) |
 | 📷 / `C` | Photo, après un compte à rebours de 3 secondes |
 | 🖼 / `G` | Ouvre la **pellicule** de la session |
+
+Une quatrième icône, la jauge, fait le tour des paliers de qualité (voir
+[Performances](#paliers-de-qualité)).
 
 La pellicule montre la dernière capture en grand et toutes les autres en
 vignettes : on choisit, on **enregistre** ou on **supprime**. Les photos
@@ -227,7 +230,7 @@ export class MonJeu extends Game {
 | `this.setup({...})` | Caméra + IA à activer |
 | `this.after(ms, fn)` | `setTimeout` annulé automatiquement à la sortie du jeu |
 | `js/games/shared.js` | HUD tout prêt : score, message centré, jauge, particules |
-| `js/games/faceMask.js` | Masques qui suivent le visage (renard, pirate, robot, lunettes) |
+| `js/games/faceMask.js` | Masques qui suivent le visage (renard, écureuil, pirate, robot, lunettes) |
 | `this.game.inputs.versions` | Compteur d'analyses, pour savoir si les points sont neufs |
 
 Un joueur a toujours cette forme :
@@ -281,6 +284,12 @@ retard. D'où les quatre pièces de `js/input/filters.js` :
 - **hystérésis sur le pincement** (déclencheur de Schmitt) : on ferme sous
   `pinchOn`, on ne rouvre qu'au-dessus de `pinchOff`. Avec un seuil unique, un
   pincement « presque fermé » s'allumait et s'éteignait dix fois par seconde ;
+- **compensation de latence.** La position affichée est toujours celle d'une
+  analyse déjà ancienne : sur une machine lente, le curseur traîne derrière la
+  main d'un tiers de seconde. On projette donc la position en avant, selon la
+  vitesse mesurée et sur la durée qu'aura coûté l'analyse — plafonnée par
+  `input.leadMs`, sans quoi un geste brusque enverrait le curseur au-delà de
+  la main ;
 - **identité stable.** Une détection est rattachée au joueur dont la dernière
   position est la plus proche, avec une pénalité de changement
   (`reassignPenalty`). Deux joueurs qui se croisent ne s'échangent plus leurs
@@ -317,11 +326,49 @@ Ce que fait le moteur pour tenir la cadence :
   l'inférence est inutile. Une analyse est tout de même forcée toutes les
   `staticMaxSkipMs` pour ne jamais rester bloqué sur une détection périmée ;
 - **seuls les détecteurs demandés tournent** — chacun en trop coûte plein pot ;
+- **les modèles se chargent un par un, à l'usage.** Le menu n'a besoin que des
+  mains : celui du corps arrive au premier jeu qui le réclame, celui du visage
+  au premier masque. Trois modèles chargés d'office, c'était une dizaine de
+  mégaoctets et autant de mémoire GPU immobilisés pour rien — sur une machine
+  modeste, cette mémoire manquait au reste ;
+- **le délégué d'inférence est choisi, pas supposé.** Le GPU gagne toujours…
+  quand il y en a un. Sans pilote graphique, le navigateur émule WebGL par
+  logiciel (SwiftShader, llvmpipe) et l'inférence « GPU » traverse cette
+  émulation ; le chemin CPU de MediaPipe, lui, utilise les unités vectorielles
+  du processeur. La carte graphique est donc lue au démarrage, et le CPU
+  l'emporte quand le GPU n'est qu'un décor. Réglage `delegate: 'auto'` ;
+- **la webcam n'est pas filmée plus finement que nécessaire** (960 × 540 par
+  défaut). Décoder du 1280 × 720 pour en tirer une analyse en 384 × 288 et un
+  décor atténué, c'est le poste le plus lourd de la chaîne sur un petit
+  processeur ;
 - image d'analyse réduite (384 × 288) et retour caméra dessiné en 960 px de
   large, étiré par le CSS : invisible sur un décor atténué, deux fois moins de
   pixels à recopier ;
 - `dt` borné, boucle en pause quand l'onglet est caché, positions des boutons
   et tampons de landmarks réutilisés d'une frame à l'autre.
+
+### Paliers de qualité
+
+Les quatre réglages ci-dessus — définition caméra, image d'analyse, cadence
+d'analyse, finesse du retour vidéo — forment des **paliers** (`js/core/Quality.js`).
+La machine est mesurée, pas devinée : en dessous de 45 images par seconde ou
+au-delà de 130 ms par analyse, la borne descend d'un cran. Elle remonte après
+vingt secondes d'accalmie franche.
+
+Ce qu'elle ne baisse jamais : la cadence des jeux. Un jeu saccadé est
+injouable, alors qu'un suivi rafraîchi vingt fois par seconde reste
+confortable.
+
+Un palier n'est gardé que s'il sert à quelque chose. Après chaque baisse, la
+mesure qui l'avait déclenchée est relue : si elle n'a pas bougé, le goulot
+était ailleurs (compositeur logiciel, écran bridé à 30 Hz) et la qualité est
+**rendue**, sans plus insister. Sans cette vérification, une machine plafonnée
+pour une raison étrangère se retrouvait avec l'image la plus grossière et
+exactement les mêmes performances.
+
+L'icône de jauge du bandeau fait le tour des paliers à la main : *auto*, puis
+élevée, allégée, économe, minimale. Pratique pour caler une borne une fois
+pour toutes sans attendre la mesure.
 
 ### Diagnostiquer
 
@@ -334,8 +381,9 @@ le chemin de secours.
 
 | Ce que vous voyez | Ce qu'il faut faire |
 | --- | --- |
-| Analyse > 50 ms | Baissez `analysisWidth/Height`, ou `delegate` sur `'CPU'` si le pilote GPU est capricieux |
+| Analyse > 50 ms | Le palier de qualité va descendre tout seul ; pour forcer, cliquez l'icône de qualité du bandeau |
 | FPS bas, analyse rapide | Le coût est ailleurs : baissez `feedbackMaxWidth` ou passez la caméra en `vignette` |
+| Qualité bloquée au palier haut malgré des FPS bas | C'est voulu : baisser n'y changeait rien, le goulot est ailleurs (compositeur logiciel, écran bridé) |
 | Suivi saccadé mais jeu fluide | Montez `maxLoadRatio` (l'IA aura plus de temps, le rendu moins) |
 | « modèles : CDN » affiché | Lancez `npm run setup` : en local, ils chargent bien plus vite |
 
@@ -357,6 +405,7 @@ js/
 │   ├── Display.js        couches d'affichage (2D, 3D, DOM)
 │   ├── Game.js           classe de base des jeux
 │   ├── GameRegistry.js   catalogue
+│   ├── Quality.js        paliers de qualité, mesurés sur la machine
 │   ├── AudioManager.js   musique et bruitages
 │   └── Stats.js          compteur de performances
 ├── input/            tout ce qui produit des « joueurs »

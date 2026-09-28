@@ -119,6 +119,11 @@ export class VisionWorkerClient {
         this.worker?.postMessage({ type: 'players', count });
     }
 
+    /** Nouvelle définition de l'image analysée (palier de qualité). */
+    resize(width, height) {
+        this.worker?.postMessage({ type: 'resize', width, height });
+    }
+
     /** @param {ImageBitmap} bitmap - transféré, donc zéro copie */
     sendFrame(bitmap, ts) {
         if (!this.worker || this.isBusy) {

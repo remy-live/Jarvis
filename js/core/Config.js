@@ -31,8 +31,19 @@ export const CONFIG = {
             }
         },
 
-        // 'GPU' est beaucoup plus rapide, 'CPU' est le repli si WebGL fait défaut
-        delegate: 'GPU',
+        // 'GPU' est beaucoup plus rapide, 'CPU' est le repli si WebGL fait
+        // défaut. 'auto' garde le GPU, sauf quand le navigateur n'a qu'un
+        // WebGL logiciel (SwiftShader, llvmpipe) : là, le CPU va plus vite.
+        delegate: 'auto',
+
+        // Définition demandée à la webcam. Inutile de décoder du 1280×720
+        // pour en tirer une analyse en 384×288 et un décor atténué : sur une
+        // machine modeste, ces pixels coûtent plus cher que tout le reste.
+        camera: { width: 960, height: 540 },
+
+        // Mesure la machine et adapte les réglages ci-dessus (voir
+        // js/core/Quality.js). Passez à false pour figer la qualité.
+        autoQuality: true,
 
         // Nombre d'inférences par seconde. Le rendu vise 60 fps :
         // on réutilise simplement la dernière détection entre deux analyses.
@@ -97,6 +108,13 @@ export const CONFIG = {
         // Nombre de frames sans détection avant de déclarer le joueur absent.
         // Évite que le curseur disparaisse au moindre raté de l'IA.
         lostFramesTolerance: 6,
+
+        // Compensation de latence (ms). Entre le moment où la caméra capte
+        // un geste et celui où l'IA rend son verdict, il s'écoule le temps
+        // d'une analyse. On avance la position dans le sens du mouvement
+        // pour rattraper ce retard — plafonné, sinon un geste brusque
+        // enverrait le curseur au-delà de la main.
+        leadMs: 90,
 
         // Continuité d'identité : une détection est rattachée au joueur dont
         // la dernière position est la plus proche, plutôt qu'à la moitié

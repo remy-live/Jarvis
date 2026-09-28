@@ -9,15 +9,19 @@
  * La page reste à 60 fps quel que soit le coût d'une analyse.
  *
  * Protocole (messages du thread principal) :
- *   { type:'init', wasm, models, delegate, players }  → 'ready' | 'init-error'
+ *   { type:'init', wasm, models, fallbackModels, delegate, players }
+ *                                                     → 'ready' | 'init-error'
  *   { type:'config', enabled:{hands,pose,face} }
  *   { type:'players', count }
+ *   { type:'resize', width, height }
  *   { type:'frame', bitmap, ts }                      → 'results' | 'frame-error'
  */
 
 const libReady = import('../vendor/vision_bundle.js');
 
 let landmarkers = { hand: null, pose: null, face: null };
+let loading = { hand: null, pose: null, face: null };
+let setup = null;   // { vision, models, fallbackModels, delegate, players }
 let canvas = null;
 let ctx = null;
 
@@ -43,7 +47,8 @@ self.onmessage = async (event) => {
             case 'init': await init(msg); break;
             case 'config': enabled = msg.enabled; break;
             case 'players': await setPlayers(msg.count); break;
-            case 'frame': detect(msg); break;
+            case 'resize': resize(msg); break;
+            case 'frame': await detect(msg); break;
             default: break;
         }
     } catch (error) {
@@ -53,7 +58,8 @@ self.onmessage = async (event) => {
     }
 };
 
-async function init({ wasm, models, delegate, players, analysisWidth, analysisHeight,
+async function init({ wasm, models, fallbackModels = null, delegate, players,
+                      analysisWidth, analysisHeight, warmup = 'hand',
                       staticThreshold: threshold = 0, staticMaxSkipMs: maxSkip = 500 }) {
     canvas = new OffscreenCanvas(analysisWidth, analysisHeight);
     ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -63,53 +69,93 @@ async function init({ wasm, models, delegate, players, analysisWidth, analysisHe
     staticThreshold = threshold;
     staticMaxSkipMs = maxSkip;
 
-    // Le délégué GPU exige un contexte WebGL dans le worker : s'il refuse,
-    // on retombe sur le CPU plutôt que d'échouer.
-    try {
-        await createLandmarkers(wasm, models, delegate, players);
-    } catch (error) {
-        if (delegate === 'GPU') await createLandmarkers(wasm, models, 'CPU', players);
-        else throw error;
-    }
+    const { FilesetResolver } = await libReady;
+    setup = {
+        vision: await FilesetResolver.forVisionTasks(wasm),
+        models, fallbackModels, delegate, players
+    };
+
+    // Un seul modèle est chargé maintenant : celui dont le menu a besoin.
+    // Les deux autres pèsent plusieurs mégaoctets et autant de mémoire GPU
+    // qu'on ne paie que si un jeu les réclame vraiment. Il sert aussi de
+    // test : c'est lui qui révèle des fichiers absents ou un délégué
+    // inutilisable, pendant que le repli vers le CDN est encore possible.
+    await ensure(warmup);
 
     self.postMessage({ type: 'ready' });
 }
 
-async function createLandmarkers(wasm, models, delegate, players) {
-    const { HandLandmarker, PoseLandmarker, FaceLandmarker, FilesetResolver } = await libReady;
-    const vision = await FilesetResolver.forVisionTasks(wasm);
+/**
+ * Charge un détecteur à la demande, une seule fois.
+ *
+ * Deux replis en cascade : le délégué GPU peut être refusé dans un worker
+ * (pas de contexte WebGL), et un modèle absent en local peut exister sur
+ * le CDN — le cas d'un déploiement statique sans `npm run setup`.
+ */
+function ensure(kind) {
+    if (landmarkers[kind]) return Promise.resolve();
+    if (loading[kind]) return loading[kind];
 
-    const [hand, pose, face] = await Promise.all([
-        HandLandmarker.createFromOptions(vision, {
-            baseOptions: { modelAssetPath: models.hand, delegate },
-            runningMode: 'VIDEO',
-            numHands: players,
-            minHandDetectionConfidence: 0.5
-        }),
-        PoseLandmarker.createFromOptions(vision, {
-            baseOptions: { modelAssetPath: models.pose, delegate },
-            runningMode: 'VIDEO',
-            numPoses: players,
-            minPoseDetectionConfidence: 0.5
-        }),
-        FaceLandmarker.createFromOptions(vision, {
-            baseOptions: { modelAssetPath: models.face, delegate },
-            runningMode: 'VIDEO',
-            outputFaceBlendshapes: false,
-            outputFacialTransformationMatrixes: false,
-            numFaces: players
-        })
-    ]);
+    loading[kind] = (async () => {
+        const paths = [setup.models[kind], setup.fallbackModels?.[kind]].filter(Boolean);
+        const delegates = setup.delegate === 'GPU' ? ['GPU', 'CPU'] : [setup.delegate];
+        let lastError = null;
 
-    landmarkers = { hand, pose, face };
+        for (const path of paths) {
+            for (const delegate of delegates) {
+                try {
+                    landmarkers[kind] = await createLandmarker(kind, path, delegate);
+                    loading[kind] = null;
+                    return;
+                } catch (error) {
+                    lastError = error;
+                }
+            }
+        }
+
+        loading[kind] = null;
+        throw lastError || new Error(`MODEL_UNAVAILABLE_${kind}`);
+    })();
+
+    return loading[kind];
+}
+
+async function createLandmarker(kind, modelAssetPath, delegate) {
+    const { HandLandmarker, PoseLandmarker, FaceLandmarker } = await libReady;
+    const baseOptions = { modelAssetPath, delegate };
+    const players = setup.players;
+
+    if (kind === 'hand') {
+        return HandLandmarker.createFromOptions(setup.vision, {
+            baseOptions, runningMode: 'VIDEO', numHands: players, minHandDetectionConfidence: 0.5
+        });
+    }
+    if (kind === 'pose') {
+        return PoseLandmarker.createFromOptions(setup.vision, {
+            baseOptions, runningMode: 'VIDEO', numPoses: players, minPoseDetectionConfidence: 0.5
+        });
+    }
+    return FaceLandmarker.createFromOptions(setup.vision, {
+        baseOptions, runningMode: 'VIDEO', numFaces: players,
+        outputFaceBlendshapes: false, outputFacialTransformationMatrixes: false
+    });
 }
 
 async function setPlayers(count) {
+    setup.players = count;
     await Promise.all([
         landmarkers.hand?.setOptions({ numHands: count }),
         landmarkers.pose?.setOptions({ numPoses: count }),
         landmarkers.face?.setOptions({ numFaces: count })
     ]);
+}
+
+/** Nouvelle définition d'analyse : le canevas suit, les modèles non. */
+function resize({ width, height }) {
+    if (!canvas || (canvas.width === width && canvas.height === height)) return;
+    canvas.width = width;
+    canvas.height = height;
+    previousTiny = null;   // la vignette de comparaison n'a plus de sens
 }
 
 /**
@@ -146,7 +192,7 @@ function isStatic(bitmap, ts) {
 }
 
 /** Un détecteur par frame reçue, en tour de rôle parmi les actifs. */
-function detect({ bitmap, ts }) {
+async function detect({ bitmap, ts }) {
     const active = [];
     if (enabled.pose) active.push('pose');
     if (enabled.hands) active.push('hand');
@@ -189,6 +235,15 @@ function detect({ bitmap, ts }) {
 
     cursor = (cursor + 1) % active.length;
     const kind = active[cursor];
+
+    // Premier passage sur ce détecteur : son modèle arrive maintenant.
+    if (!landmarkers[kind]) {
+        await ensure(kind);
+        // Le chargement a duré : l'image est périmée. On rend la main, la
+        // suivante sera analysée normalement.
+        self.postMessage({ type: 'results', kind: null, payload: null, ms: 0 });
+        return;
+    }
 
     const started = performance.now();
     const result = landmarkers[kind].detectForVideo(canvas, lastTs);

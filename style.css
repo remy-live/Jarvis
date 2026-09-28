@@ -301,6 +301,12 @@ h1.glitch {
     outline-offset: 2px;
 }
 
+/* Réglage volontairement bridé (qualité forcée au minimum, par exemple) */
+.btn-icon.is-dim {
+    color: var(--accent-warm);
+    border-color: var(--accent-warm);
+}
+
 .btn-pill {
     height: 36px;
     padding: 0 16px;
@@ -891,151 +897,7 @@ h1.glitch {
 
 
 /* =========================================================
-   8. ÉLÉMENTS DE JEU (couche DOM)
-   ========================================================= */
-
-.game-item {
-    position: absolute;
-    top: -100px;
-    display: grid;
-    place-items: center;
-    line-height: 1;
-    will-change: transform;
-    animation: fall linear forwards;
-    filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.45));
-}
-
-@keyframes fall {
-    from { transform: translateY(0) rotate(0deg); }
-    to   { transform: translateY(115vh) rotate(240deg); }
-}
-
-.game-item.highlight { filter: drop-shadow(0 0 12px var(--accent)); }
-.game-item.popped { animation: pop 0.25s ease-out forwards; }
-
-@keyframes pop {
-    to { transform: scale(1.8); opacity: 0; }
-}
-
-.particle {
-    position: absolute;
-    border-radius: 50%;
-    pointer-events: none;
-    will-change: transform, opacity;
-}
-
-
-/* =========================================================
-   9. MASQUE ÉCUREUIL (jeu NOISETTES)
-   ========================================================= */
-
-#squirrel-mask {
-    position: absolute;
-    top: 0; left: 0;
-    width: 120px;
-    height: 180px;
-    transform-origin: center center;
-    pointer-events: none;
-    will-change: transform;
-    opacity: 0.92;
-}
-
-.mask-head {
-    width: 100%;
-    height: 100%;
-    border-radius: 50% 50% 45% 45%;
-    background: radial-gradient(circle at 30% 30%, #d98b3f 10%, #8a5423 90%);
-    border: 2px solid rgba(0, 0, 0, 0.35);
-    position: relative;
-}
-
-/* Oreilles */
-.mask-head::before,
-.mask-head::after {
-    content: '';
-    position: absolute;
-    top: -22px;
-    width: 42px;
-    height: 52px;
-    border-radius: 50% 50% 20% 20%;
-    background: #8a5423;
-    border: 2px solid rgba(0, 0, 0, 0.3);
-    z-index: -1;
-}
-.mask-head::before { left: 4px; transform: rotate(-10deg); }
-.mask-head::after { right: 4px; transform: rotate(10deg); }
-
-.mask-eyes {
-    position: absolute;
-    top: 34%;
-    width: 100%;
-    display: flex;
-    justify-content: space-around;
-    padding: 0 14px;
-}
-
-.eye {
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: #10141a;
-    border: 2px solid rgba(255, 255, 255, 0.75);
-    position: relative;
-    transition: height 0.08s linear;
-}
-.eye::after {
-    content: '';
-    position: absolute;
-    top: 3px; left: 4px;
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.9);
-}
-.eye.closed { height: 4px; border-radius: 4px; background: #10141a; }
-.eye.closed::after { display: none; }
-
-.mask-nose {
-    position: absolute;
-    top: 52%;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 18px;
-    height: 13px;
-    border-radius: 50%;
-    background: #2b1a10;
-}
-
-.mask-mouth {
-    position: absolute;
-    top: 62%;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 46px;
-    height: 10px;
-    border-radius: 0 0 24px 24px;
-    background: #3a2114;
-    overflow: hidden;
-    transition: height 0.06s linear;
-}
-.mask-mouth.ready-to-eat { outline: 2px solid rgba(143, 166, 184, 0.5); }
-
-.mask-teeth {
-    display: flex;
-    justify-content: center;
-    gap: 2px;
-    padding-top: 1px;
-}
-
-.tooth {
-    width: 9px;
-    height: 12px;
-    border-radius: 0 0 3px 3px;
-    background: #f4f6f8;
-}
-
-
-/* =========================================================
-   10. ACCESSIBILITÉ
+   8. ACCESSIBILITÉ
    ========================================================= */
 
 @media (prefers-reduced-motion: reduce) {
